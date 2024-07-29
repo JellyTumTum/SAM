@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from './components/Header';
 import ArtistSelectionCard from './components/ArtistSelectionCard';
 import { Button } from '@material-tailwind/react';
+import RouteFinding from './components/RouteFinding';
 import axios from 'axios';
 
 function App() {
@@ -29,14 +30,8 @@ function App() {
     return (
         <div className="App dark:bg-darkBackground bg-background">
             <Header />
-            <main className="flex flex-col justify-center items-center h-screen dark:bg-darkBackground bg-background">
-                <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0 bg-background dark:bg-darkBackground">
-                    <ArtistSelectionCard title="Starting Artist" selectedArtist={startingArtist} setSelectedArtist={setStartingArtist} />
-                    <ArtistSelectionCard title="End Artist" selectedArtist={endArtist} setSelectedArtist={setEndArtist} />
-                </div>
-                <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
-                    <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">Find Route</Button>
-                </div>
+            <main>
+                <RouteFinding />
             </main>
         </div>
     );

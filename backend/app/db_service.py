@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from datetime import datetime, timedelta
 import pytz
@@ -9,11 +9,10 @@ from typing import List
 
 def save_artist(db: Session, artist: DtoArtist, previous_saves: List[str] = []):
     # ensures all the genres exist before saving them.
-    print(f"{artist}")
     print(f"Saving {artist.name} to database")
     is_full_artist = len(artist.connections) > 1
     db_genre_list: List[DbGenre] = []
-    if is_full_artist and artist.popularity != -1 :
+    if is_full_artist : # and artist.popularity != -1 -> # TODO: Add in once None in connections is fixed
         print(f"Detected that {artist.name} is a fully compiled artist")
         db_genre_list = save_artist_genres(db, artist, artist.genres)
     db_artist = db.query(DbArtist).filter(DbArtist.id == artist.id).first()
@@ -196,8 +195,8 @@ def combine_dto_artists(dto_artist_1: DtoArtist, dto_artist_2: DtoArtist, db: Se
 
 
 def get_artist_by_id(db: Session, artist_id: str) -> DtoArtist:
-    # This does not grab connections.
-    db_artist = db.query(DbArtist).filter(DbArtist.id == artist_id).first()
+    # Use joinedload to eagerly load genres and connections to keep them attached to the session.
+    db_artist = db.query(DbArtist).filter(DbArtist.id == artist_id).options(joinedload(DbArtist.genres), joinedload(DbArtist.connections)).first()
     if db_artist:
         genres = [genre.name for genre in db_artist.genres]
         print(f"database connections for {db_artist.name} : {len(db_artist.connections)}. Length of Genres : {len(genres)}")
@@ -218,8 +217,8 @@ def get_artist_connections(db: Session, artist: DbArtist) -> List[DtoArtist]:
     connections: List[DbConnection] = db.query(DbConnection).filter(
         (DbConnection.artist_id == artist.id) | 
         (DbConnection.related_artist_id == artist.id)
-    ).all()
-
+    ).options(joinedload(DbConnection.artist), joinedload(DbConnection.related_artist)).all() # added joinedLoad options to fix out of session issues with cached artists. 
+ 
     # Get all related artists
     related_artists: List[DtoArtist] = convert_raw_connections_to_artists(artist, connections)
 
@@ -262,7 +261,7 @@ def db_artist_to_dto_artist(db_artist: DbArtist, excluded_artists: List[DbArtist
         name=db_artist.name,
         popularity=db_artist.popularity,
         lastUpdated=db_artist.last_updated,
-        genres=db_artist.genres,
+        genres=[genre.name for genre in db_artist.genres], # db_artist.genres, -> used to be this but was erroring.
         connections=convert_raw_connections_to_artists(db_artist, db_artist.connections, excluded_artists)
     )
 

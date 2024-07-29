@@ -255,7 +255,7 @@ def get_multiple_artists(artist_list: List[Artist]) -> List[Artist]:
                 followers=item['followers']['total'],
                 name=item['name'],
                 popularity=item['popularity'],
-                lastUpdated=datetime.now(pytz.utc),
+                lastUpdated=None,
                 connections=[],  # does not get obtained through this anyway, so isnt even used below 
                 genres=item.get('genres', [])
             )
@@ -299,7 +299,7 @@ def get_single_artist_by_id(artist_id: str) -> Artist:
         followers=item['followers']['total'],
         name=item['name'],
         popularity=item['popularity'],
-        lastUpdated=datetime.now(pytz.utc),
+        lastUpdated=None,
         connections=[],  # Initialize empty list
         genres=item.get('genres', []),
         genreDict={}  # Initialize empty dict
@@ -380,7 +380,14 @@ def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = No
     starting_artist = starting_artist
     checked_artists: List[Tuple[Artist, bool]] = []
     unchecked_artists: List[Tuple[Artist, int, int, List[Artist]]] = [] # Artist, depth from starting artist, calculated weight, previous connections
+    flipped_artists = False
+    
+    if starting_artist.popularity > ending_artist.popularity:
+        starting_artist, ending_artist = ending_artist, starting_artist
+        flipped_artists = True
+        # switches round as starting artist is more popular so will be easier to reach from ending artist as a start. 
 
+        
     # 1. Get all related artists for the first artist. 
     
     starting_artist.connections = get_connections(starting_artist, db)
@@ -426,6 +433,7 @@ def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = No
             chosen_artist : Tuple[Artist, int, int, List[Artist]] = unchecked_artists.pop(-1)
             print(f"chosen_artist = {chosen_artist[0].name}. Depth: {chosen_artist[1]}. Weight: {chosen_artist[2]}. Previous_connections = [{', '.join([artist.name for artist in chosen_artist[3]])}]")
             chosen_artist[0].connections = get_connections(chosen_artist[0], db) # chosen_artist needs to be saved to database seen as it has its connections.
+            chosen_artist[0].lastUpdated = datetime.now(pytz.utc)
             if chosen_artist[0].connections is not None:
                 artist_with_connections_found = True
             else:
@@ -436,7 +444,6 @@ def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = No
         potential_end = check_if_complete(chosen_artist[0], checked_artists, ending_artist)
         if potential_end != []:
             print(f"potential_end is not empty. answer should be found")
-            # line below is erroring because the chosen_artist in this case is not 
             for artist in chosen_artist[3]:
                 artist_route.append(artist)
                 print(f"added {artist.name} to artist_route. -> [{', '.join([artist.name for artist in artist_route])}]")
@@ -471,8 +478,4 @@ def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = No
         print(f"{artist_route}")
 
     save_multiple_artists(db, artist_route)                                      
-    return artist_route
-
-
-
-# TODO: Current error is related to recurison depth which i assume is because of a closed loop interacting with itself. but not tested. need to ideally adjust recursion depth so the actual context is available instead of a terminal full of errors. 
+    return artist_route[::-1] if flipped_artists else artist_route

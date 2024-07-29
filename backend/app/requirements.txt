@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 requests
+websockets
 sqlalchemy
 psycopg2-binary
 pytz
