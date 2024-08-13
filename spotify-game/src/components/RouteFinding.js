@@ -1,57 +1,216 @@
 import React, { useState, useEffect } from 'react';
 import ArtistSelectionCard from './ArtistSelectionCard';
-import { Button } from '@material-tailwind/react';
+import { Button, Typography } from '@material-tailwind/react';
 import axios from 'axios';
-// import Graph from './Graph';
+import DynamicGraph from './DynamicGraph';
 
 const RouteFinding = () => {
     const [startingArtist, setStartingArtist] = useState(null);
     const [endArtist, setEndArtist] = useState(null);
-    const [ws, setWs] = useState(null);
+
+    // graph logic
+    const [selectedArtistID, setSelectedArtistID] = useState(null);
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
+    const [displayMessage, setDisplayMessage] = useState(null);
+    // const [selectionMessage, setSelectionMessage] = useState(null);
+
+    const [ws, setWs] = useState(null);
+    const [wsId, setWsId] = useState(null);
+    const [pingInterval, setPingInterval] = useState(null);
+
+
+    // const sampleData = {
+    //     "nodes": [
+    //         { "id": "1", "name": "Artist A", "popularity": 80, "artURL": "https://i.scdn.co/image/ab6761610000e5ebe672b5f553298dcdccb0e676", "followers": 1000000, "genres": ["Pop", "Rock"] },
+    //         { "id": "2", "name": "Artist B", "popularity": 70, "artURL": "https://i.scdn.co/image/ab6761610000e5eb3bcef85e105dfc42399ef0ba", "followers": 800000, "genres": ["Hip Hop"] },
+    //         { "id": "3", "name": "Artist C", "popularity": 90, "artURL": "https://i.scdn.co/image/ab67616100005174ee3f614c84b9a473cbdb8e07", "followers": 1200000, "genres": ["Jazz", "Blues"] },
+    //         { "id": "4", "name": "Artist D", "popularity": 60, "artURL": "https://i.scdn.co/image/ab676161000051743c350f20203c8bc10c0b5a9f", "followers": 500000, "genres": ["Country"] }
+    //     ],
+    //     "links": [
+    //         { "source": "1", "target": "2" },
+    //         { "source": "2", "target": "3" },
+    //         { "source": "3", "target": "4" },
+    //         { "source": "4", "target": "1" }
+    //     ]
+    // }
+
 
     useEffect(() => {
-        const socket = new WebSocket('ws://localhost:8000/ws');
-        socket.onopen = () => {
-            console.log('WebSocket connection established');
-        };
-        socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            setGraphData((prevData) => ({
-                nodes: [...prevData.nodes, ...data.nodes],
-                links: [...prevData.links, ...data.links]
-            }));
-        };
-        socket.onclose = () => {
-            console.log('WebSocket connection closed');
-        };
+        const id = generateWebSocketId();
+        setWsId(id);
+        console.log("creating websocket with id: " + id);
+        const socket = createWebSocket(id);
         setWs(socket);
 
         return () => {
-            socket.close();
+            clearInterval(pingInterval);
+            if (socket) {
+                socket.close();
+            }
         };
     }, []);
 
-    const handleFindRoute = async () => {
-        if (startingArtist && endArtist) {
-            console.log(startingArtist)
-            console.log(endArtist)
-            try {
-                const response = await axios.post('http://localhost:8000/routes/find', {
-                    startingArtist: startingArtist,
-                    endingArtist: endArtist
-                });
-                console.log('Route:', response.data);
-            } catch (error) {
-                console.error('Error finding route:', error);
+    const updateNodeIsComplete = (nodes, id) => {
+        return nodes.map(node => node.id === id ? { ...node, isComplete: true, isSelected: false } : node);
+    };
+
+    const updateNodeIsSelected = (nodes, id) => {
+        return nodes.map(node => node.id === id ? { ...node, isSelected: true } : node);
+    };
+
+    const mergeGraphData = (existingData, newData) => {
+        const existingNodeIds = new Set(existingData.nodes.map(node => node.id));
+        const existingLinkIds = new Set(existingData.links.map(link => `${link.source}-${link.target}`));
+
+        const newNodes = newData.nodes.filter(node => !existingNodeIds.has(node.id));
+        const newLinks = newData.links.filter(link => !existingLinkIds.has(`${link.source}-${link.target}`));
+
+        return {
+            nodes: [...existingData.nodes, ...newNodes],
+            links: [...existingData.links, ...newLinks]
+        };
+    };
+
+    const createWebSocket = (id) => {
+        const socket = new WebSocket(`ws://localhost:8000/ws/${id}`);
+        console.log("Attempting to run socket.onopen");
+    
+        socket.onopen = () => {
+            console.log('WebSocket connection established');
+            const interval = setInterval(() => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, 10000); // Ping every 10 seconds
+            setPingInterval(interval);
+        };
+    
+        socket.onerror = (error) => {
+            console.error('WebSocket error observed:', error);
+        };
+    
+        socket.onclose = (event) => {
+            console.log(`WebSocket closed: Code = ${event.code}, Reason = ${event.reason}`);
+        };
+    
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log(data);
+
+            if (data.update_type === "start") {
+                // Special Case for the first message as it contains just the starting artist and it needs to be set as selected not complete but uses the route configuration. 
+                /*  structure of data: 
+                {"update_type": "start",
+                    "message": display_message, 
+                    "graph_additions": changes.to_dict(), 
+                    "artist_id": new_artist.id}
+                */
+                // 1. Display Message adjustment
+                setDisplayMessage(data.message);
+                // 2. Add all new additions to the graph
+                data.graph_additions['nodes'][0].isSelected = true
+                setSelectedArtistID(data.graph_additions['nodes'][0].id)
+                setGraphData(mergeGraphData(graphData, data.graph_additions))
+                // 3. Set the starting node as selected.
             }
+
+            if (data.update_type === "route") {
+                /*  structure of data: 
+                {"update_type": "route",
+                    "message": display_message, 
+                    "graph_additions": changes.to_dict(), 
+                    "artist_id": new_artist.id} -> shouldnt be needed due to current setup (using selectedNode)
+                */
+
+                // 1. Display Message adjustment
+                setDisplayMessage(data.message);
+                // 1. Update selected artist to complete.
+                if (selectedArtistID != null) {
+                    const correct_node = selectedArtistID.id === data.artist_id
+                    console.log(`selectedNode matches node given: ${correct_node}`);
+                }
+                const newNodes = updateNodeIsComplete(graphData.nodes, data.artist_id)
+                // 2. Add all new additions to the graph
+                setGraphData(mergeGraphData({ "nodes": newNodes, "links": graphData['links'] }, data.graph_additions))
+                // 3. 
+            }
+
+
+
+            //////////
+            if (data.update_type === "selection") {
+                // Update graphData here
+                /* structure of data:
+                {"update_type": "selection", 
+                    "message": f"Artist selected for expansion : {selected_artist.name}", 
+                    "artist_id": selected_artist.id}
+                */
+                // 1. Display Message adjustment
+                setDisplayMessage(data.message);
+                // 2. Assign selected node
+                const newNodes = updateNodeIsSelected(data.artist_id)
+                setSelectedArtistID(data.artist_id)
+                setGraphData({ "nodes": newNodes, "links": graphData.links })
+                // 3. Set node as selected
+            }
+
+
+        };
+        socket.onclose = () => {
+            console.log('WebSocket connection closed, attempting to reconnect');
+            clearInterval(pingInterval);
+            const newId = generateWebSocketId();
+            setWsId(newId);
+            const newSocket = createWebSocket(newId);
+            setWs(newSocket);
+        };
+        return socket;
+    };
+
+    const generateWebSocketId = (length = 8) => {
+        const base62Characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let wsId = '';
+        for (let i = 0; i < length; i++) {
+            const randomIndex = Math.floor(Math.random() * base62Characters.length);
+            wsId += base62Characters[randomIndex];
+        }
+        return wsId;
+    };
+
+    const ensureWebSocketConnection = (callback) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            callback();
         } else {
-            console.log('one or two artists missing');
+            console.log('WebSocket not open, retrying...');
+            setTimeout(() => ensureWebSocketConnection(callback), 1000); // Retry after 1 second
         }
     };
 
+    const handleFindRoute = async () => {
+        ensureWebSocketConnection(async () => {
+            if (startingArtist && endArtist) {
+                console.log(startingArtist);
+                console.log(endArtist);
+                console.log(wsId);
+                try {
+                    const response = await axios.post('http://localhost:8000/routes/find', {
+                        starting_artist: startingArtist,
+                        ending_artist: endArtist,
+                        websocket_id: wsId
+                    });
+                    console.log('Route:', response.data);
+                } catch (error) {
+                    console.error('Error finding route:', error);
+                }
+            } else {
+                console.log('one or two artists missing');
+            }
+        });
+    };
+
     return (
-        <div className="flex flex-col justify-center items-center h-screen dark:bg-darkBackground bg-background">
+        <div className="flex flex-col items-center h-full dark:bg-darkBackground bg-background">
+            <p className="text-txt dark:text-darkTxt m-5">websocket id = {wsId}</p>
             <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0 bg-background dark:bg-darkBackground">
                 <ArtistSelectionCard title="Starting Artist" selectedArtist={startingArtist} setSelectedArtist={setStartingArtist} />
                 <ArtistSelectionCard title="End Artist" selectedArtist={endArtist} setSelectedArtist={setEndArtist} />
@@ -59,9 +218,16 @@ const RouteFinding = () => {
             <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
                 <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">Find Route</Button>
             </div>
-            {/* <div className="flex-grow bg-white p-4"> */}
-                {/* <Graph data={graphData} /> */}
-            {/* </div> */}
+            <div className="mt-5">
+                {displayMessage ? (
+                    <p className="text-txt dark:text-darkTxt">Status : {displayMessage}</p>
+                ) : (
+                    <p className="text-txt dark:text-darkTxt">Status Messages will display here</p>
+                )}
+            </div>
+            <div className=" w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
+                {graphData.nodes.length > 0 && <DynamicGraph graphData={graphData} />}
+            </div>
         </div>
     );
 };

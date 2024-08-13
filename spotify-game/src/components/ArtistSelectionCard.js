@@ -41,8 +41,8 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist }) => {
   };
 
   return (
-    <Card className="w-64 h-96 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg p-4 flex flex-col justify-between items-center
-    hover:outline-accent hov">
+    <Card className="w-64 h-96 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg p-4 flex flex-col justify-between items-center border-2
+    border-accent dark:border-darkAccent">
       <Typography variant="h6" className="text-txt dark:text-darkTxt mb-4">{title}</Typography>
       <div className="w-24 h-24 mb-4 flex items-center justify-center bg-background dark:bg-darkBackground rounded-full">
         {selectedArtist ? (

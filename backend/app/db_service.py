@@ -94,7 +94,8 @@ def update_artist_with_db(db: Session, artist: DtoArtist) -> DtoArtist:
     dto_artist_from_db: DtoArtist = get_artist_by_id(db, artist.id)
     if dto_artist_from_db is not None:
         print(f"Skibidi update_artist_with_db | connections length for {dto_artist_from_db.name} : {len(dto_artist_from_db.connections)}")
-        return combine_dto_artists(dto_artist_from_db, artist, db)
+        return combine_dto_artists(dto_artist_from_db, artist,
+                                   len(dto_artist_from_db.connections) > 1 or len(dto_artist_from_db.connections) > len(artist.connections), db)
     else:
         return artist
     
@@ -145,7 +146,7 @@ def combine_artists(non_db_artist: DtoArtist, db_artist: DtoArtist, db: Session=
 
     return combined_artist    
 
-def combine_dto_artists(dto_artist_1: DtoArtist, dto_artist_2: DtoArtist, db: Session=None) -> DtoArtist:
+def combine_dto_artists(dto_artist_1: DtoArtist, dto_artist_2: DtoArtist, connections_saved, db: Session=None, ) -> DtoArtist:
     
     combined_artist = DtoArtist(
         id=dto_artist_1.id,
@@ -188,7 +189,7 @@ def combine_dto_artists(dto_artist_1: DtoArtist, dto_artist_2: DtoArtist, db: Se
     if combined_artist.lastUpdated is None:
         combined_artist.lastUpdated = datetime.now(pytz.utc)
     
-    if dto_artist_2.connections and combined_connections and len(combined_connections) > len(dto_artist_2.connections) and db:
+    if not connections_saved and db:
         save_artist(db, combined_artist)
 
     return combined_artist

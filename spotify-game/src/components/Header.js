@@ -9,7 +9,7 @@ const Header = () => {
   };
 
   return (
-    <header className="relative flex justify-center items-center p-4 bg-background2 dark:bg-darkBackground2 w-full">
+    <header className="relative flex justify-center items-center p-4 bg-background2 dark:bg-darkBackground2 w-full" style={{ height: '64px' }}>
       <Typography variant="h2">PROJECT S.A.M</Typography>
       <div className="absolute right-4 top-4 inline-block w-12 align-middle select-none transition duration-200 ease-in">
         <input

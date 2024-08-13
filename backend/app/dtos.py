@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Set
 from datetime import datetime
+import copy
 
 class Followers(BaseModel):
     total: int
@@ -160,6 +161,163 @@ class AlbumsResponse(BaseModel):
     previous: Optional[str]
     total: int
     items: List[Album]
+    
+class GraphArtist(BaseModel):
+    
+    id: str
+    artURL: str
+    followers: int
+    name: str
+    popularity: int
+    last_updated: Optional[datetime]
+    genres: Optional[List[str]] = []
+    depth: int
+    is_complete: bool = False
+    is_selected: bool = False
+    
+    def __init__(self, artist: Artist, depth, is_complete=False, is_selected=False):
+        super().__init__(
+            id=artist.id, 
+            artURL=artist.artURL, 
+            followers=artist.followers, 
+            name=artist.name, 
+            popularity=artist.popularity, 
+            last_updated=artist.lastUpdated, 
+            genres=artist.genres, 
+            depth=depth, 
+            is_complete=is_complete,
+            is_selected=is_selected
+        )
+        
+    def setComplete(self):
+        self.is_complete = True
+        
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        if isinstance(other, GraphArtist):
+            return self.id == other.id
+        return False
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "artURL": self.artURL,
+            "followers": self.followers,
+            "name": self.name,
+            "popularity": self.popularity,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
+            "last_updated_print": self.last_updated.strftime("%B %d, %Y at %I:%M %p") if self.last_updated else None,
+            "genres": self.genres,
+            "depth": self.depth,
+            "isComplete": self.is_complete,
+            "isSelected": self.is_selected
+        }
+    
+class GraphConnection(BaseModel):
+    
+    source: str # id of a GraphArtist
+    target: str # id of a GraphArtist
+    
+    def __init__(self, source: str, target: str):
+        super().__init__(
+            source=source, 
+            target=target)
+        
+    def __hash__(self):
+        return hash(self.source + self.target)
+
+    def __eq__(self, other):
+        if isinstance(other, GraphConnection):
+            exact_match = self.source == other.source and self.target == other.target
+            switched_match = self.source == other.target and self.target == other.source
+            return exact_match or switched_match
+        return False
+        
+    def to_dict(self):
+        return {
+            "source": self.source,
+            "target": self.target,
+        }
+    
+class GraphStructure(BaseModel):
+    nodes: Set[GraphArtist] = Field(default_factory=set)
+    links: Set[GraphConnection] = Field(default_factory=set)
+    artist_dict: Dict[str, GraphArtist] = Field(default_factory=dict)
+
+        
+    def add_artist(self, artist: Artist, depth: int) -> str:
+        
+        return_value = None
+        has_connections = artist.connections != None and len(artist.connections) > 1
+        print(f" [SKIB] connections for {artist.name} : {len(artist.connections)} ({has_connections})")
+        if (self.contains_artist(artist)):
+            if has_connections:
+                self.setComplete(artist)
+                return_value = artist.id
+        else:
+            graph_artist = GraphArtist(artist, depth, is_complete=has_connections, is_selected=False)
+            self.nodes.add(graph_artist)
+            self.artist_dict[artist.id] = graph_artist
+            
+        if has_connections:
+            for connection in artist.connections:
+                if (not self.contains_artist(connection)):
+                    print(f"[GRONK] Adding {connection.name} to self.nodes")
+                    print(f"{connection}")
+                    connectionArtist = GraphArtist(connection, depth+1, is_complete=False, is_selected=False)
+                    
+                    print(f"[Livvy] len(self.nodes) = {len(self.nodes)}")
+                    self.nodes.add(connectionArtist)
+                    print(f"[Dunne] len(self.nodes) = {len(self.nodes)}")
+                    self.artist_dict[connectionArtist.id] = connectionArtist
+                    
+                self.add_connection(artist, connection)
+                
+        return return_value # Return value denotes if an artists complete status was switched
+    
+    def add_connection(self, main_artist: Artist, secondary_artist: Artist):
+        self.links.add(GraphConnection(main_artist.id, secondary_artist.id)) 
+        
+    def contains_artist(self, artist: Artist):
+        return artist.id in self.artist_dict
+    
+    def setComplete(self, artist: Artist):
+        self.artist_dict[artist.id].setComplete()
+        
+    def to_dict(self):
+        return {
+            "nodes": [node.to_dict() for node in self.nodes],
+            "links": [link.to_dict() for link in self.links],
+        }
+        
+
+class GraphManager(BaseModel):
+    
+    full_graph: GraphStructure = Field(default_factory=GraphStructure)
+    changes_graph: GraphStructure = Field(default_factory=GraphStructure)
+        
+    def add_artist(self, artist: Artist, depth: int) -> str: 
+        return_value = self.full_graph.add_artist(artist, depth)
+        self.changes_graph.add_artist(artist, depth)
+        print(f"len(self.full_graph.nodes) = {len(self.full_graph.nodes)}")
+        print(f"len(self.changes_graph.nodes) = {len(self.changes_graph.nodes)}")
+        print(f"len(self.full_graph.links) = {len(self.full_graph.links)}")
+        print(f"len(self.changes_graph.links) = {len(self.changes_graph.links)}")
+        return return_value
+        
+    def get_changes(self):
+        changes = copy.deepcopy(self.changes_graph)
+        self.changes_graph = GraphStructure()  # Reset changes graph after sending
+        return changes
+    
+    def to_dict(self):
+        return {
+            "full_graph": self.full_graph.to_dict(),
+            "changes_graph": self.changes_graph.to_dict()
+        }
+        
 
 # After the class definition, you need to update forward references
 Album.model_rebuild()

@@ -1,5 +1,7 @@
 import os
 import time
+import json
+from fastapi import WebSocket
 from queue import Queue
 from datetime import datetime, timedelta
 from typing import List, Tuple
@@ -112,7 +114,6 @@ def get_artist(artist_name: str, max_results: int) -> List[Artist]:
     
     artists = []
     for item in artist_search_response.artists.items:
-        print(f"item.genres = {item.genres}")
         profile_picture_url = select_profile_picture(item.images)
         artist = Artist(
             id=item.id,
@@ -221,7 +222,11 @@ def get_connections(artist: Artist, db : Session = None) -> Artist:
         return artist.connections
     albums = get_artist_albums(artist.id, all_albums=True)
     artist.lastUpdated = datetime.now(pytz.utc)
-    return get_artists_from_album_list(albums, artist)
+    artist_list = get_artists_from_album_list(albums, artist)
+    if artist_list is not None:
+        return get_multiple_artists(artist_list)
+    else:
+        return None
 
 def contains_artist(artist_list : List[Artist], artist : Artist):
     for a in artist_list:
@@ -370,43 +375,72 @@ def remove_connections(artist_list : List[Artist]) -> List[Artist]:
         artist.connections = None
     return artist_list
 
-def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = None) -> List[Artist]:
+async def send_route_update(ws_connection, graph_manager: GraphManager, display_message: str, new_artist: Artist, current_depth: int, overrideUpdateType=None) -> None:
+    # updated_artist_id: str = None # holds id of the artist that was visited (needs isComplete to be adjusted on frontend) 
+    update_type = overrideUpdateType if overrideUpdateType else "route"
+    # TODO: complete this so that new updates are sent to frontend in correct format.
+    print(f"new_artist.name = {new_artist.name}, connection_count = {len(new_artist.connections)} ({current_depth})")
+    updated_artist_id = graph_manager.add_artist(new_artist, current_depth)
+    
+    changes = graph_manager.get_changes()
+    await ws_connection.send_text(json.dumps({"update_type": update_type,
+                                            "message": display_message, 
+                                            "graph_additions": changes.to_dict(), 
+                                            #  "changed_artist" : updated_artist_id, 
+                                            "artist_id": new_artist.id}))
+    
+async def set_selected_artist(ws_connection, selected_artist: Artist):
+    
+    await ws_connection.send_text(json.dumps({"update_type": "selection", 
+                                              "message": f"Artist selected for expansion : {selected_artist.name}", 
+                                              "selected_artist": selected_artist.id}))
+
+async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connection: WebSocket, db : Session = None) -> List[Artist]:
     # base case. 
     # To disable DB entry can just pass db as None
     if starting_artist.id == ending_artist.id: 
         return [starting_artist]
-
+        
     artist_route = [] # return value 
     starting_artist = starting_artist
     checked_artists: List[Tuple[Artist, bool]] = []
     unchecked_artists: List[Tuple[Artist, int, int, List[Artist]]] = [] # Artist, depth from starting artist, calculated weight, previous connections
-    flipped_artists = False
+    graph_manager: GraphManager = GraphManager()
     
+    flipped_artists = False
+    flipped_artist_str = ""
     if starting_artist.popularity > ending_artist.popularity:
         starting_artist, ending_artist = ending_artist, starting_artist
         flipped_artists = True
-        # switches round as starting artist is more popular so will be easier to reach from ending artist as a start. 
-
+        flipped_artist_str = "Flipped order due to starting artist being more popular, so easier to find"
+        # switches round as starting artist is more popular so will be easier to reach from ending artist as a start.
         
+    if ws_connection:
+        await send_route_update(ws_connection, graph_manager, f"Starting route finding: {starting_artist.name} -> {ending_artist.name} (" + flipped_artist_str + ") ",  starting_artist, 0, overrideUpdateType="start")
+
     # 1. Get all related artists for the first artist. 
     
     starting_artist.connections = get_connections(starting_artist, db)
     print(f"Artists connecting to {starting_artist.name} \n")
+    await send_route_update(ws_connection, graph_manager, f"Connections for {starting_artist.name} added. ", starting_artist, 0)
     for artist in starting_artist.connections: 
         # print(f"Artist number {count}: {artist.name} \n")
         if artist.id == ending_artist.id:
-            return [starting_artist, ending_artist]
-
+            await send_route_update(ws_connection, graph_manager, f"Route Complete: {starting_artist.name} -> {ending_artist.name}. Found in 1 link.", ending_artist, 1)
+            return [ending_artist, starting_artist] if flipped_artists else [starting_artist, ending_artist]
+        
+    await set_selected_artist(ws_connection, ending_artist)
     ending_artist.connections = get_connections(ending_artist, db)
     print(f"Artists connecting to {ending_artist.name} \n")
     for artist in ending_artist.connections:
         checked_artists.append((artist, True))
         # print(f"Artist number {count}: {artist.name} \n")
+    await send_route_update(ws_connection, graph_manager, f"Connections for {ending_artist.name} added. ", ending_artist, 1)
         
-    # batch fill up artists. information. 
-    starting_artist.connections = get_multiple_artists(starting_artist.connections)
+    # starting_artist.connections = get_multiple_artists(starting_artist.connections) -> moved this into get_connections, shouldnt be needed anymore
     for artist in starting_artist.connections:
         # Due to immutability of tuples, needs to be ran here, the get_multiple_artists call is made here as its more efficient purely on spotify api calls, not overall runtime. (as if the connection is directly from starting_artist then the extra information is not required)
+        # due to get_multiple_artists being relocated inside get_connections, i believe this can be moved to the first starting_artist.connections for loop, but if it aint broke dont fix it sort of logic applies here as of this comment.
         unchecked_artists.append((artist, 1, -1, [starting_artist]))
     if db:
         save_artist(db, starting_artist)
@@ -432,6 +466,7 @@ def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = No
         while not artist_with_connections_found:
             chosen_artist : Tuple[Artist, int, int, List[Artist]] = unchecked_artists.pop(-1)
             print(f"chosen_artist = {chosen_artist[0].name}. Depth: {chosen_artist[1]}. Weight: {chosen_artist[2]}. Previous_connections = [{', '.join([artist.name for artist in chosen_artist[3]])}]")
+            await set_selected_artist(ws_connection, chosen_artist[0])
             chosen_artist[0].connections = get_connections(chosen_artist[0], db) # chosen_artist needs to be saved to database seen as it has its connections.
             chosen_artist[0].lastUpdated = datetime.now(pytz.utc)
             if chosen_artist[0].connections is not None:
@@ -439,6 +474,8 @@ def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = No
             else:
                 if len(unchecked_artists) == 0:
                     return []
+        
+        await send_route_update(ws_connection, graph_manager, f"Connections for {chosen_artist[0].name} added", chosen_artist[0], chosen_artist[1])
         if db:
             save_artist(db, chosen_artist[0])
         potential_end = check_if_complete(chosen_artist[0], checked_artists, ending_artist)
@@ -479,3 +516,11 @@ def find_route(starting_artist: Artist, ending_artist: Artist, db : Session = No
 
     save_multiple_artists(db, artist_route)                                      
     return artist_route[::-1] if flipped_artists else artist_route
+
+
+# TODO: Continue running Taylor->Ed to find errors and fix them.
+
+# After: 
+#Incorporate frontend graph management, grab every websocket message and construct the graph.
+
+# Might want to add is_selected to the graphArtist or something so theres a way to display that visually on the frontend. might need to brainstorm more on that one.
