@@ -189,8 +189,11 @@ class GraphArtist(BaseModel):
             is_selected=is_selected
         )
         
-    def setComplete(self):
+    def set_complete(self):
         self.is_complete = True
+        
+    def set_selected(self):
+        self.is_selected = True
         
     def __hash__(self):
         return hash(self.id)
@@ -245,16 +248,16 @@ class GraphStructure(BaseModel):
     nodes: Set[GraphArtist] = Field(default_factory=set)
     links: Set[GraphConnection] = Field(default_factory=set)
     artist_dict: Dict[str, GraphArtist] = Field(default_factory=dict)
+    current_selected_artist_id: str = None
 
         
     def add_artist(self, artist: Artist, depth: int) -> str:
-        
         return_value = None
         has_connections = artist.connections != None and len(artist.connections) > 1
-        print(f" [SKIB] connections for {artist.name} : {len(artist.connections)} ({has_connections})")
         if (self.contains_artist(artist)):
+            self.artist_dict[artist.id].depth = depth
             if has_connections:
-                self.setComplete(artist)
+                self.set_complete(artist)
                 return_value = artist.id
         else:
             graph_artist = GraphArtist(artist, depth, is_complete=has_connections, is_selected=False)
@@ -263,16 +266,31 @@ class GraphStructure(BaseModel):
             
         if has_connections:
             for connection in artist.connections:
+                # print(f"Connection.name = {connection.name}. Artist.name =  {artist.name}")
                 if (not self.contains_artist(connection)):
-                    print(f"[GRONK] Adding {connection.name} to self.nodes")
-                    print(f"{connection}")
-                    connectionArtist = GraphArtist(connection, depth+1, is_complete=False, is_selected=False)
-                    
-                    print(f"[Livvy] len(self.nodes) = {len(self.nodes)}")
+                    # complicated depth logic just to account for adding artists that arent directly connected to the start
+                    new_depth = 0
+                    if depth == -1:
+                        new_depth = -2
+                    else:
+                        new_depth = depth+1
+                    connectionArtist = GraphArtist(connection, new_depth, is_complete=False, is_selected=False)
                     self.nodes.add(connectionArtist)
-                    print(f"[Dunne] len(self.nodes) = {len(self.nodes)}")
                     self.artist_dict[connectionArtist.id] = connectionArtist
-                    
+                else:
+                    if self.artist_dict[connection.id].depth < 0:
+                        print(f"overriding {connection.name}'s depth with {artist.name}'s depth + 1")
+                        self.artist_dict[connection.id].depth = depth+1
+                #         for link in self.links:
+                #             if link.source == connection.id:
+                #                 if self.artist_dict[link.target].depth < depth + 2 or self.artist_dict[link.target].depth < 0:
+                #                     print(f"overriding {self.artist_dict[link.target].name}'s depth with {artist.name}'s depth + 2")
+                #                     self.artist_dict[link.target].depth = depth+2
+                #             if link.target == connection.id:
+                #                 if self.artist_dict[link.source].depth < depth + 2 or self.artist_dict[link.source].depth < 0:
+                #                     print(f"overriding {self.artist_dict[link.source].name}'s depth with {artist.name}'s depth + 2")
+                #                     self.artist_dict[link.source].depth = depth+2
+                            
                 self.add_connection(artist, connection)
                 
         return return_value # Return value denotes if an artists complete status was switched
@@ -283,9 +301,36 @@ class GraphStructure(BaseModel):
     def contains_artist(self, artist: Artist):
         return artist.id in self.artist_dict
     
-    def setComplete(self, artist: Artist):
-        self.artist_dict[artist.id].setComplete()
+    def set_complete(self, artist: Artist):
+        self.artist_dict[artist.id].set_complete()
         
+    def set_selected(self, artist: Artist):
+        if self.current_selected_artist_id:
+            self.artist_dict[self.current_selected_artist_id].set_complete() # Assumes that as a new one is being selected the last one is being set to complete
+        if artist.id in self.artist_dict:
+            self.artist_dict[artist.id].set_selected()
+        else:
+            self.add_artist(artist, -1)
+            self.artist_dict[artist.id].set_selected()
+        self.current_selected_artist_id = artist.id
+        
+    def finalise(self, ending_artist):
+        
+        required_links = []
+        for link in self.links:
+            if link.source == ending_artist.id:
+                required_links.append(link)
+            # may require below line if links are missing.
+            # if link.target == ending_artist.id:
+            #     required_links.append(link)
+        for link in required_links:
+            if self.artist_dict[link.target].depth < 0:
+                print(f"finalisation: adjusting {self.artist_dict[link.target].name}'s depth from {self.artist_dict[link.target].depth} to {self.artist_dict[link.source].depth + 1}")
+                self.artist_dict[link.target].depth = self.artist_dict[link.source].depth + 1 
+            # if self.artist_dict[link.source].depth < 0:
+            #    self.artist_dict[link.source].depth = self.artist_dict[link.target].depth + 1 
+        
+    
     def to_dict(self):
         return {
             "nodes": [node.to_dict() for node in self.nodes],
@@ -301,16 +346,27 @@ class GraphManager(BaseModel):
     def add_artist(self, artist: Artist, depth: int) -> str: 
         return_value = self.full_graph.add_artist(artist, depth)
         self.changes_graph.add_artist(artist, depth)
-        print(f"len(self.full_graph.nodes) = {len(self.full_graph.nodes)}")
-        print(f"len(self.changes_graph.nodes) = {len(self.changes_graph.nodes)}")
-        print(f"len(self.full_graph.links) = {len(self.full_graph.links)}")
-        print(f"len(self.changes_graph.links) = {len(self.changes_graph.links)}")
+        # print(f"len(self.full_graph.nodes) = {len(self.full_graph.nodes)}")
+        # print(f"len(self.changes_graph.nodes) = {len(self.changes_graph.nodes)}")
+        # print(f"len(self.full_graph.links) = {len(self.full_graph.links)}")
+        # print(f"len(self.changes_graph.links) = {len(self.changes_graph.links)}")
         return return_value
+    
+    def set_selected_artist(self, selected_artist: Artist):
+        self.full_graph.set_selected(selected_artist)
         
     def get_changes(self):
         changes = copy.deepcopy(self.changes_graph)
         self.changes_graph = GraphStructure()  # Reset changes graph after sending
         return changes
+    
+    def get_graph(self):
+        return self.full_graph
+    
+    def finalise_graph(self, ending_artist):
+        
+        self.full_graph.finalise(ending_artist)
+        
     
     def to_dict(self):
         return {

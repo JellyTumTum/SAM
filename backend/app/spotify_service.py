@@ -85,7 +85,7 @@ def make_spotify_call(url: str, headers, params=None):
             time.sleep(retry_after)
         else:
             response.raise_for_status()  # Catches other errors. cause im definately gonna run into one somehow.
-            print(f"Call successful. | rolling calls : {call_result[1]}, expected outcome was : {"True" if call_result[0] else "False"}") 
+            # print(f"Call successful. | rolling calls : {call_result[1]}, expected outcome was : {"True" if call_result[0] else "False"}") 
             return response
 
 # DEPRECATED due to adjustments to image storage.
@@ -217,7 +217,7 @@ def get_connections(artist: Artist, db : Session = None) -> Artist:
         print(f"Checking db for up-to-date artist entry")
         artist = update_artist_with_db(db, artist)
     print(f"get_connections | connections length for {artist.name} : {len(artist.connections)}")
-    if len(artist.connections) > 1 and artist.lastUpdated and artist.lastUpdated.astimezone(pytz.utc) > datetime.now(pytz.utc) - timedelta(days=7):
+    if len(artist.connections) > 2: # and artist.lastUpdated.astimezone(pytz.utc) > datetime.now(pytz.utc) - timedelta(days=7) --> Add back in once lastUpdated is fixed
         print(f"Using Database Cached Connections")
         return artist.connections
     albums = get_artist_albums(artist.id, all_albums=True)
@@ -265,14 +265,12 @@ def get_multiple_artists(artist_list: List[Artist]) -> List[Artist]:
                 genres=item.get('genres', [])
             )
             all_artists.append(updated_artist)
-        print(f"obtained all artist information")
     # Update the original artist list with the new details
     for old_artist, new_artist in zip(artist_list, all_artists):
         old_artist.artURL = new_artist.artURL
         old_artist.followers = new_artist.followers
         old_artist.popularity = new_artist.popularity
         old_artist.genres = new_artist.genres
-    print(f"updated original artist list with new information")
     return artist_list
 
 # just made for utility, not currently used
@@ -356,7 +354,7 @@ def check_if_complete(current_artist : Artist, checked_artists: List[Tuple[Artis
     checked_artist_ids = {artist.id for artist, isConnectedToTarget in checked_artists if isConnectedToTarget}
     # print(f"current_artist.connections = {current_artist.connections}")
     for connection in current_artist.connections:
-        print(f"Checking if {connection.name} -> {target_artist.name}")
+        # print(f"Checking if {connection.name} -> {target_artist.name}")
 
         if connection.id == target_artist.id:
             print(f"returning [{current_artist.name}, {target_artist.name}]")
@@ -375,31 +373,54 @@ def remove_connections(artist_list : List[Artist]) -> List[Artist]:
         artist.connections = None
     return artist_list
 
-async def send_route_update(ws_connection, graph_manager: GraphManager, display_message: str, new_artist: Artist, current_depth: int, overrideUpdateType=None) -> None:
+async def send_route_update(ws_connection, graph_manager: GraphManager, display_message: str, new_artist: Artist, current_depth: int,send_full_graph=False, overrideUpdateType: bool = None) -> None:
     # updated_artist_id: str = None # holds id of the artist that was visited (needs isComplete to be adjusted on frontend) 
     update_type = overrideUpdateType if overrideUpdateType else "route"
     # TODO: complete this so that new updates are sent to frontend in correct format.
     print(f"new_artist.name = {new_artist.name}, connection_count = {len(new_artist.connections)} ({current_depth})")
-    updated_artist_id = graph_manager.add_artist(new_artist, current_depth)
+    graph_manager.add_artist(new_artist, current_depth)
     
     changes = graph_manager.get_changes()
-    await ws_connection.send_text(json.dumps({"update_type": update_type,
+    if send_full_graph:
+        full_graph = graph_manager.get_graph()
+        await ws_connection.send_text(json.dumps({"update_type": update_type,
+                                            "message": display_message, 
+                                            "graph": full_graph.to_dict(), 
+                                            #  "changed_artist" : updated_artist_id, 
+                                            "artist_id": new_artist.id,
+                                            "full_graph": True}))
+    else:
+        await ws_connection.send_text(json.dumps({"update_type": update_type,
                                             "message": display_message, 
                                             "graph_additions": changes.to_dict(), 
                                             #  "changed_artist" : updated_artist_id, 
-                                            "artist_id": new_artist.id}))
+                                            "artist_id": new_artist.id,
+                                            "full_graph": False}))
     
-async def set_selected_artist(ws_connection, selected_artist: Artist):
-    
-    await ws_connection.send_text(json.dumps({"update_type": "selection", 
+async def set_selected_artist(ws_connection, selected_artist: Artist, graph_manager : GraphManager = None):
+    send_full_graph = graph_manager != None
+    if send_full_graph:
+        graph_manager.set_selected_artist(selected_artist)
+        graph = graph_manager.get_graph()
+        await ws_connection.send_text(json.dumps({"update_type": "selection", 
                                               "message": f"Artist selected for expansion : {selected_artist.name}", 
-                                              "selected_artist": selected_artist.id}))
+                                              "graph": graph.to_dict(),
+                                              "full_graph": True}))
+    else:
+        await ws_connection.send_text(json.dumps({"update_type": "selection", 
+                                              "message": f"Artist selected for expansion : {selected_artist.name}", 
+                                              "selected_artist": selected_artist.id,
+                                              "full_graph": False}))
 
-async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connection: WebSocket, db : Session = None) -> List[Artist]:
+class RouteReply(BaseModel):
+    route_list: List[Artist]
+    graph: Optional[GraphStructure] = None
+    
+async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connection: WebSocket, db : Session = None, send_full_graph=True) -> RouteReply:
     # base case. 
     # To disable DB entry can just pass db as None
     if starting_artist.id == ending_artist.id: 
-        return [starting_artist]
+        return RouteReply([starting_artist], graph=None)
         
     artist_route = [] # return value 
     starting_artist = starting_artist
@@ -416,26 +437,28 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
         # switches round as starting artist is more popular so will be easier to reach from ending artist as a start.
         
     if ws_connection:
-        await send_route_update(ws_connection, graph_manager, f"Starting route finding: {starting_artist.name} -> {ending_artist.name} (" + flipped_artist_str + ") ",  starting_artist, 0, overrideUpdateType="start")
+        await send_route_update(ws_connection, graph_manager, f"Starting route finding: {starting_artist.name} -> {ending_artist.name} (" + flipped_artist_str + ") ",  starting_artist, 0, overrideUpdateType="start", send_full_graph=send_full_graph)
 
     # 1. Get all related artists for the first artist. 
     
     starting_artist.connections = get_connections(starting_artist, db)
     print(f"Artists connecting to {starting_artist.name} \n")
-    await send_route_update(ws_connection, graph_manager, f"Connections for {starting_artist.name} added. ", starting_artist, 0)
+    await send_route_update(ws_connection, graph_manager, f"Connections for {starting_artist.name} added. ", starting_artist, 0, send_full_graph=send_full_graph)
     for artist in starting_artist.connections: 
-        # print(f"Artist number {count}: {artist.name} \n")
+        print(f"artist.name = {artist.name}, ending_artist.name = {ending_artist.name}")
         if artist.id == ending_artist.id:
-            await send_route_update(ws_connection, graph_manager, f"Route Complete: {starting_artist.name} -> {ending_artist.name}. Found in 1 link.", ending_artist, 1)
-            return [ending_artist, starting_artist] if flipped_artists else [starting_artist, ending_artist]
-        
-    await set_selected_artist(ws_connection, ending_artist)
+            
+            await send_route_update(ws_connection, graph_manager, f"Route Complete: {starting_artist.name} -> {ending_artist.name}. Found in 1 link.", ending_artist, 1, send_full_graph=send_full_graph)
+            graph_manager.finalise_graph()
+            return RouteReply([ending_artist, starting_artist] if flipped_artists else [starting_artist, ending_artist], graph=graph_manager.get_graph())
+    await set_selected_artist(ws_connection, ending_artist, graph_manager=graph_manager)
     ending_artist.connections = get_connections(ending_artist, db)
+    save_artist(db, ending_artist)
     print(f"Artists connecting to {ending_artist.name} \n")
     for artist in ending_artist.connections:
         checked_artists.append((artist, True))
         # print(f"Artist number {count}: {artist.name} \n")
-    await send_route_update(ws_connection, graph_manager, f"Connections for {ending_artist.name} added. ", ending_artist, 1)
+    await send_route_update(ws_connection, graph_manager, f"Connections for {ending_artist.name} added. ", ending_artist, -1, send_full_graph=send_full_graph)
         
     # starting_artist.connections = get_multiple_artists(starting_artist.connections) -> moved this into get_connections, shouldnt be needed anymore
     for artist in starting_artist.connections:
@@ -448,38 +471,55 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
     found = False
     potential_end = check_if_complete(starting_artist, checked_artists, ending_artist)
     if potential_end != []:
+        # to check if target_artist or connecting artist is used
+        required_connecting_artist = len(potential_end) > 2
+        if required_connecting_artist:
+            potential_end[1].connections = get_connections(potential_end[1])
+            # Fixes inconsistencies in spotifys data where A has a connection to B but B doesnt have one back even though they should.
+            if not any(conn.id == ending_artist.id for conn in potential_end[1].connections): 
+                    potential_end[1].connections.append(ending_artist)  
+            #
+            await send_route_update(ws_connection, graph_manager, f"Connections for {potential_end[1].name} added", potential_end[1], 1, send_full_graph=send_full_graph)
         print(f"potential_end is not empty. answer should be found")
         # line below is erroring because the chosen_artist in this case is not 
         for artist in potential_end:
             artist_route.append(artist)
             print(f"added {artist.name} to artist_route. -> [{', '.join([artist.name for artist in artist_route])}]")
         found = True
-    
     while not found: 
         
         #1. sort unchecked_artists.
         unchecked_artists = sort_by_weight(unchecked_artists, ending_artist)
-        for artist, depth, weight, previous_connections in unchecked_artists:
-            print(f"Artist: {artist.name}. Depth: {depth}. Weight: {weight}. Previous_connections = [{', '.join([artist.name for artist in previous_connections])}]")
         #2. remove last artist from the list and get their connections. 
         artist_with_connections_found = False
         while not artist_with_connections_found:
             chosen_artist : Tuple[Artist, int, int, List[Artist]] = unchecked_artists.pop(-1)
             print(f"chosen_artist = {chosen_artist[0].name}. Depth: {chosen_artist[1]}. Weight: {chosen_artist[2]}. Previous_connections = [{', '.join([artist.name for artist in chosen_artist[3]])}]")
-            await set_selected_artist(ws_connection, chosen_artist[0])
+            if (not send_full_graph):
+                await set_selected_artist(ws_connection, chosen_artist[0], graph_manager=graph_manager)
             chosen_artist[0].connections = get_connections(chosen_artist[0], db) # chosen_artist needs to be saved to database seen as it has its connections.
             chosen_artist[0].lastUpdated = datetime.now(pytz.utc)
             if chosen_artist[0].connections is not None:
                 artist_with_connections_found = True
             else:
                 if len(unchecked_artists) == 0:
-                    return []
+                    found=True
+                    artist_route = []
         
-        await send_route_update(ws_connection, graph_manager, f"Connections for {chosen_artist[0].name} added", chosen_artist[0], chosen_artist[1])
+        await send_route_update(ws_connection, graph_manager, f"Connections for {chosen_artist[0].name} added", chosen_artist[0], chosen_artist[1], send_full_graph=send_full_graph)
         if db:
             save_artist(db, chosen_artist[0])
         potential_end = check_if_complete(chosen_artist[0], checked_artists, ending_artist)
         if potential_end != []:
+            # to check if target_artist or connecting artist is used
+            required_connecting_artist = len(potential_end) > 2
+            if required_connecting_artist:
+                potential_end[1].connections = get_connections(potential_end[1])
+                # Fixes inconsistencies in spotifys data where A has a connection to B but B doesnt have one back even though they should.
+                if not any(connection.id == ending_artist.id for connection in potential_end[1].connections): 
+                    potential_end[1].connections.append(ending_artist)  
+                #
+                await send_route_update(ws_connection, graph_manager, f"Connections for {potential_end[1].name} added", potential_end[1], chosen_artist[1] + 1, send_full_graph=send_full_graph)
             print(f"potential_end is not empty. answer should be found")
             for artist in chosen_artist[3]:
                 artist_route.append(artist)
@@ -497,13 +537,11 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
             for connection in chosen_artist[3]:
                 new_previous_connections.append(connection)
             new_previous_connections.append(chosen_artist[0])    
-            print(f"{new_previous_connections}")
+            # print(f"{new_previous_connections}")
             for connection in chosen_artist[0].connections:
                 if connection.id not in checked_artist_ids and connection.id not in unchecked_artists_ids:
                     unchecked_artists.append((connection, chosen_artist[1] + 1, -1, new_previous_connections)) #if errors try chosen_artist[3].append(chosen_artist[0])
-                    print(f"Added ({connection.name}, {chosen_artist[1] + 1}, -1, {",".join(artist.name for artist in new_previous_connections)})")
-                else:
-                    print(f"{connection.name} excluded from unchecked_artists as its already in checked_artists")
+                    # print(f"Added ({connection.name}, {chosen_artist[1] + 1}, -1, {",".join(artist.name for artist in new_previous_connections)})")
     
     need_info = False
     for artist in artist_route:
@@ -514,13 +552,10 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
         artist_route = get_multiple_artists(artist_route)
         print(f"{artist_route}")
 
-    save_multiple_artists(db, artist_route)                                      
-    return artist_route[::-1] if flipped_artists else artist_route
-
-
-# TODO: Continue running Taylor->Ed to find errors and fix them.
-
-# After: 
-#Incorporate frontend graph management, grab every websocket message and construct the graph.
-
-# Might want to add is_selected to the graphArtist or something so theres a way to display that visually on the frontend. might need to brainstorm more on that one.
+    save_multiple_artists(db, artist_route) 
+    graph_manager.finalise_graph(ending_artist)
+    route_reply = RouteReply(
+        route_list=artist_route[::-1] if flipped_artists else artist_route,
+        graph=graph_manager.get_graph() if send_full_graph else None
+    )    
+    return route_reply       

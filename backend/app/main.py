@@ -45,19 +45,20 @@ class RouteRequest(BaseModel):
     websocket_id: str
 
 @app.post("/routes/find")
-async def fetch_route(route_request: RouteRequest, db: Session=Depends(get_db)):
+async def fetch_route(route_request: RouteRequest, send_full_graph=True, db: Session=Depends(get_db)) -> RouteReply:
     
     startingArtist = route_request.starting_artist
     endingArtist = route_request.ending_artist
     websocket_id = route_request.websocket_id
     
     ws_connection = connections[websocket_id]
-    route = await find_route(startingArtist, endingArtist, ws_connection, db)
-    if route == []:
+    route_reply: RouteReply = await find_route(startingArtist, endingArtist, ws_connection, db, send_full_graph=send_full_graph)
+    if route_reply.route_list == []:
         raise HTTPException(status_code=404, detail="No route found between the specified artists. Potential closed loop chosen for starting or ending artist.")
     
-    print(f"route = [{', '.join([artist.name for artist in route])}]")
-    return remove_connections(route)
+    print(f"route = [{', '.join([artist.name for artist in route_reply.route_list])}]")
+    return {"route_list": remove_connections(route_reply.route_list), 
+            "graph": route_reply.graph if send_full_graph else None}
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):

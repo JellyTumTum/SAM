@@ -9,11 +9,11 @@ from typing import List
 
 def save_artist(db: Session, artist: DtoArtist, previous_saves: List[str] = []):
     # ensures all the genres exist before saving them.
-    print(f"Saving {artist.name} to database")
+    # print(f"Saving {artist.name} to database")
     is_full_artist = len(artist.connections) > 1
     db_genre_list: List[DbGenre] = []
-    if is_full_artist : # and artist.popularity != -1 -> # TODO: Add in once None in connections is fixed
-        print(f"Detected that {artist.name} is a fully compiled artist")
+    if artist.popularity != -1 and len(artist.genres) < 0 :
+        print(f"Detected that {artist.name} has genres to save")
         db_genre_list = save_artist_genres(db, artist, artist.genres)
     db_artist = db.query(DbArtist).filter(DbArtist.id == artist.id).first()
     if db_artist: # updates existing version
@@ -66,7 +66,7 @@ def save_artist_genres(db: Session, dto_artist: DtoArtist, genres: List[str]) ->
 
 def save_artist_connections(db: Session, dto_artist: DtoArtist, connections: List[DtoArtist]):
     
-    print(f"Saving connections for {dto_artist.name}")
+    # print(f"Saving connections for {dto_artist.name}")
     for connection in connections:
         # print(f"Checking Connection: {dto_artist.name} - {connection.name}")
         db_connection = check_connection(db, dto_artist, connection)
@@ -92,6 +92,7 @@ def save_multiple_artists(db: Session, artists: List[DtoArtist]):
 def update_artist_with_db(db: Session, artist: DtoArtist) -> DtoArtist:
     print(f"Running update_artist_with_db for {artist.name}")
     dto_artist_from_db: DtoArtist = get_artist_by_id(db, artist.id)
+    print(f"Outside of get_artist_by_id for {artist.name}")
     if dto_artist_from_db is not None:
         print(f"Skibidi update_artist_with_db | connections length for {dto_artist_from_db.name} : {len(dto_artist_from_db.connections)}")
         return combine_dto_artists(dto_artist_from_db, artist,
@@ -222,39 +223,45 @@ def get_artist_connections(db: Session, artist: DbArtist) -> List[DtoArtist]:
  
     # Get all related artists
     related_artists: List[DtoArtist] = convert_raw_connections_to_artists(artist, connections)
+    for artist in related_artists:
+        if artist.name == 'Taylor Swift':
+            print("ON SKIBIDI THIS SHIT WAS HERE WHY")
 
     return related_artists
 
-def convert_raw_connections_to_artists(db_artist: DbArtist, raw_connections: list[DbConnection], excluded_artists : List[DbArtist] = []) -> List[DtoArtist]:
+def convert_raw_connections_to_artists(db_artist: DbArtist, raw_connections: list[DbConnection], excluded_ids : List[str] = []) -> List[DtoArtist]:
     
     related_artists = []
-    excluded_ids = [artist.id for artist in excluded_artists]
+    # print(f"converting raw connections for {db_artist.name}. raw connection count: {len(raw_connections)}")
     for connection in raw_connections:
         related_artist = None
-        if connection.artist_id in excluded_ids or connection.related_artist_id in excluded_ids:
+        excluded_artist = None
+        if connection.related_artist_id in excluded_ids: # connection.artist_id in excluded_ids or --> may need to add back.
             continue
         if connection.artist_id == db_artist.id:
             related_artist : DbArtist = connection.related_artist
             print(f"Connection Found: {db_artist.name} -> {related_artist.name}")
+            excluded_artist = related_artist
         elif connection.related_artist_id == db_artist:
             related_artist : DbArtist = connection.artist
             print(f"Connection Found: {related_artist.name} -> {db_artist.name}")
+            excluded_artist = db_artist
         if related_artist != None:
-            excluded_artists.append(db_artist)
-            excluded_artists = set(excluded_artists)
-            excluded_artists = list(excluded_artists)
-            print(f"convert_raw_connections_to_artists | Appending {db_artist.name} to excluded_artists.")
-            print(f"excluded_artists.size = {len(excluded_artists)}")
-            dtoArtist : DtoArtist = db_artist_to_dto_artist(related_artist, excluded_artists)
+            excluded_ids.append(excluded_artist.id)
+            excluded_ids = set(excluded_ids)
+            excluded_ids = list(excluded_ids)
+            print(f"convert_raw_connections_to_artists | Appending {excluded_artist.name}'s id to excluded_ids.")
+            # print(f"excluded_ids.size = {len(excluded_ids)}")
+            dtoArtist : DtoArtist = db_artist_to_dto_artist(related_artist, excluded_ids)
             related_artists.append(dtoArtist)
+            # print(f"{db_artist.name}'s related_artists = [{', '.join([artist.name for artist in related_artists])}]")
     return related_artists
 
-def db_artist_to_dto_artist(db_artist: DbArtist, excluded_artists: List[DbArtist] = []) -> DtoArtist:
+def db_artist_to_dto_artist(db_artist: DbArtist, excluded_artists: List[str] = []) -> DtoArtist:
     
     # if artist.is_full_artist:
     #     db_genre_list = save_artist_genres(get_db(), artist, artist.genres)
     # removed above logic as i believe the genreList should be attached to the artist already (untested)
-    print(f"db_artist_to_dto_artist | Excluding [{",".join(artist.name for artist in excluded_artists)}]")
     return DtoArtist(
         id=db_artist.id,
         artURL=db_artist.arturl,

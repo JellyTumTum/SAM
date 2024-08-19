@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ArtistSelectionCard from './ArtistSelectionCard';
 import { Button, Typography } from '@material-tailwind/react';
 import axios from 'axios';
 import DynamicGraph from './DynamicGraph';
+
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 
 const RouteFinding = () => {
     const [startingArtist, setStartingArtist] = useState(null);
@@ -12,11 +14,15 @@ const RouteFinding = () => {
     const [selectedArtistID, setSelectedArtistID] = useState(null);
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [displayMessage, setDisplayMessage] = useState(null);
+    const routeFound = useRef(false);
     // const [selectionMessage, setSelectionMessage] = useState(null);
 
     const [ws, setWs] = useState(null);
     const [wsId, setWsId] = useState(null);
     const [pingInterval, setPingInterval] = useState(null);
+
+    // UI Details 
+    const [findRouteString, setFindRouteString] = useState("Find Route");
 
 
     // const sampleData = {
@@ -74,7 +80,7 @@ const RouteFinding = () => {
     const createWebSocket = (id) => {
         const socket = new WebSocket(`ws://localhost:8000/ws/${id}`);
         console.log("Attempting to run socket.onopen");
-    
+
         socket.onopen = () => {
             console.log('WebSocket connection established');
             const interval = setInterval(() => {
@@ -84,74 +90,92 @@ const RouteFinding = () => {
             }, 10000); // Ping every 10 seconds
             setPingInterval(interval);
         };
-    
+
         socket.onerror = (error) => {
             console.error('WebSocket error observed:', error);
         };
-    
+
         socket.onclose = (event) => {
             console.log(`WebSocket closed: Code = ${event.code}, Reason = ${event.reason}`);
         };
-    
+
         socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            console.log(data);
+            if (routeFound.current === false) {
+                const data = JSON.parse(event.data);
+                console.log(data);
 
-            if (data.update_type === "start") {
-                // Special Case for the first message as it contains just the starting artist and it needs to be set as selected not complete but uses the route configuration. 
-                /*  structure of data: 
-                {"update_type": "start",
-                    "message": display_message, 
-                    "graph_additions": changes.to_dict(), 
-                    "artist_id": new_artist.id}
-                */
-                // 1. Display Message adjustment
-                setDisplayMessage(data.message);
-                // 2. Add all new additions to the graph
-                data.graph_additions['nodes'][0].isSelected = true
-                setSelectedArtistID(data.graph_additions['nodes'][0].id)
-                setGraphData(mergeGraphData(graphData, data.graph_additions))
-                // 3. Set the starting node as selected.
-            }
-
-            if (data.update_type === "route") {
-                /*  structure of data: 
-                {"update_type": "route",
-                    "message": display_message, 
-                    "graph_additions": changes.to_dict(), 
-                    "artist_id": new_artist.id} -> shouldnt be needed due to current setup (using selectedNode)
-                */
-
-                // 1. Display Message adjustment
-                setDisplayMessage(data.message);
-                // 1. Update selected artist to complete.
-                if (selectedArtistID != null) {
-                    const correct_node = selectedArtistID.id === data.artist_id
-                    console.log(`selectedNode matches node given: ${correct_node}`);
+                if (data.update_type === "start") {
+                    // Special Case for the first message as it contains just the starting artist and it needs to be set as selected not complete but uses the route configuration. 
+                    /*  structure of data: 
+                    {"update_type": "start",
+                        "message": display_message, 
+                        "graph_additions": changes.to_dict(), 
+                        "artist_id": new_artist.id}
+                    */
+                    // 1. Display Message adjustment
+                    setDisplayMessage(data.message);
+                    if (data.full_graph) {
+                        setGraphData(data.graph)
+                    }
+                    else {
+                        // 2. Add all new additions to the graph
+                        data.graph_additions['nodes'][0].isSelected = true
+                        setSelectedArtistID(data.graph_additions['nodes'][0].id)
+                        setGraphData(prevGraphData => mergeGraphData(prevGraphData, data.graph_additions));
+                    }
+                    // 3. Set the starting node as selected.
                 }
-                const newNodes = updateNodeIsComplete(graphData.nodes, data.artist_id)
-                // 2. Add all new additions to the graph
-                setGraphData(mergeGraphData({ "nodes": newNodes, "links": graphData['links'] }, data.graph_additions))
-                // 3. 
-            }
 
+                if (data.update_type === "route") {
+                    /*  structure of data: 
+                    {"update_type": "route",
+                        "message": display_message, 
+                        "graph_additions": changes.to_dict(), 
+                        "artist_id": new_artist.id} -> shouldnt be needed due to current setup (using selectedNode)
+                    */
 
+                    // 1. Display Message adjustment
+                    setDisplayMessage(data.message);
+                    console.log("RouteFound = " + routeFound + " message = " + data.message)
+                    if (data.full_graph) {
+                        setGraphData(data.graph)
+                    }
+                    else {
+                        // 1. Update selected artist to complete.
+                        if (selectedArtistID != null) {
+                            const correct_node = selectedArtistID.id === data.artist_id
+                            console.log(`selectedNode matches node given: ${correct_node}`);
+                        }
+                        const newNodes = updateNodeIsComplete(graphData.nodes, data.artist_id)
+                        // 2. Add all new additions to the graph
+                        setGraphData(prevGraphData => mergeGraphData({ "nodes": newNodes, "links": prevGraphData.links }, data.graph_additions));
+                    }
+                    // 3. 
+                }
 
-            //////////
-            if (data.update_type === "selection") {
-                // Update graphData here
-                /* structure of data:
-                {"update_type": "selection", 
-                    "message": f"Artist selected for expansion : {selected_artist.name}", 
-                    "artist_id": selected_artist.id}
-                */
-                // 1. Display Message adjustment
-                setDisplayMessage(data.message);
-                // 2. Assign selected node
-                const newNodes = updateNodeIsSelected(data.artist_id)
-                setSelectedArtistID(data.artist_id)
-                setGraphData({ "nodes": newNodes, "links": graphData.links })
-                // 3. Set node as selected
+                if (data.update_type === "selection") {
+                    // Update graphData here
+                    /* structure of data:
+                    {"update_type": "selection", 
+                        "message": f"Artist selected for expansion : {selected_artist.name}", 
+                        "artist_id": selected_artist.id}
+                    */
+                    // 1. Display Message adjustment
+                    setDisplayMessage(data.message);
+                    if (data.full_graph) {
+                        setGraphData(data.graph)
+                    }
+                    else {
+                        // 2. Assign selected node
+                        const newNodes = updateNodeIsSelected(graphData.nodes, data.artist_id)
+                        setSelectedArtistID(data.artist_id)
+                        setGraphData(prevGraphData => ({
+                            nodes: [...newNodes],
+                            links: [...prevGraphData.links]
+                        }));
+                    }
+                }
+
             }
 
 
@@ -177,28 +201,35 @@ const RouteFinding = () => {
         return wsId;
     };
 
-    const ensureWebSocketConnection = (callback) => {
+    const ensureWebSocketConnection = (callback, maxRetries = 5, retryCount = 0) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
+            setFindRouteString("Find Route");
             callback();
+        } else if (retryCount < maxRetries) {
+            console.log(`WebSocket not open, retrying... (${retryCount + 1}/${maxRetries})`);
+            setFindRouteString("Connecting to server...")
+            setTimeout(() => ensureWebSocketConnection(callback, maxRetries, retryCount + 1), 1000); // Retry after 1 second
         } else {
-            console.log('WebSocket not open, retrying...');
-            setTimeout(() => ensureWebSocketConnection(callback), 1000); // Retry after 1 second
+            setFindRouteString("Server unavailable");
         }
     };
 
     const handleFindRoute = async () => {
+        routeFound.current = false
         ensureWebSocketConnection(async () => {
             if (startingArtist && endArtist) {
-                console.log(startingArtist);
-                console.log(endArtist);
-                console.log(wsId);
                 try {
+                    setFindRouteString("Finding Route...")
                     const response = await axios.post('http://localhost:8000/routes/find', {
                         starting_artist: startingArtist,
                         ending_artist: endArtist,
                         websocket_id: wsId
                     });
-                    console.log('Route:', response.data);
+                    setFindRouteString("Find Route");
+                    console.log('Route:', response.data.route_list);
+                    setDisplayMessage('Route: ' + response.data.route_list.map(artist => artist.name).join(' -> '));
+                    setGraphData(response.data.graph)
+                    routeFound.current = true
                 } catch (error) {
                     console.error('Error finding route:', error);
                 }
@@ -209,23 +240,32 @@ const RouteFinding = () => {
     };
 
     return (
-        <div className="flex flex-col items-center h-full dark:bg-darkBackground bg-background">
+        <div className="flex flex-col items-center h-full dark:bg-darkBackground bg-background relative">
+            {/* Status Indicator */}
+            <div className="absolute top-4 right-4">
+                {routeFound.current ? (
+                    <CheckCircleIcon className="h-8 w-8 text-green-500" />
+                ) : (
+                    <XCircleIcon className="h-8 w-8 text-red-500" />
+                )}
+            </div>
+
             <p className="text-txt dark:text-darkTxt m-5">websocket id = {wsId}</p>
             <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0 bg-background dark:bg-darkBackground">
                 <ArtistSelectionCard title="Starting Artist" selectedArtist={startingArtist} setSelectedArtist={setStartingArtist} />
                 <ArtistSelectionCard title="End Artist" selectedArtist={endArtist} setSelectedArtist={setEndArtist} />
             </div>
             <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
-                <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">Find Route</Button>
+                <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">{findRouteString}</Button>
             </div>
             <div className="mt-5">
                 {displayMessage ? (
-                    <p className="text-txt dark:text-darkTxt">Status : {displayMessage}</p>
+                    <p className="text-txt dark:text-darkTxt">{displayMessage}</p>
                 ) : (
                     <p className="text-txt dark:text-darkTxt">Status Messages will display here</p>
                 )}
             </div>
-            <div className=" w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
+            <div className="w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
                 {graphData.nodes.length > 0 && <DynamicGraph graphData={graphData} />}
             </div>
         </div>
@@ -233,3 +273,17 @@ const RouteFinding = () => {
 };
 
 export default RouteFinding;
+
+
+/*
+TODO: 
+- Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
+
+Try to find a way for the graph spawning to be less explosive. 
+Add adjusters for the physics factors 
+    -> UI Redesign so the viewing window is a lot bigger.
+        -> Add a connection symbol that notes if a websocket connection is present. 
+        -> Adjust ArtistSelection Cards to be more compact, and placed either side of the screen.
+        -> Make and implement the 'ArtistShowcase' which shows the last selectedArtist (should be closable) and implement endpoints to provide more information on the connections.
+
+*/

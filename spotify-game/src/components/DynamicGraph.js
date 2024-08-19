@@ -2,17 +2,27 @@ import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import themeColours from '../themeColours';
 
-const DynamicGraph = ({ graphData }) => {
+const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
     const svgRef = useRef();
     const isDark = localStorage.getItem('darkMode') === 'true';
-    const colours = {
+    const colors = { // American spellchecker forcing me to use colors to avoid annoying squiggly lines.
         background: isDark ? themeColours.darkBackground : themeColours.background,
         background2: isDark ? themeColours.darkBackground2 : themeColours.background2,
         primary: isDark ? themeColours.darkPrimary : themeColours.primary,
         secondary: isDark ? themeColours.darkSecondary : themeColours.secondary,
         accent: isDark ? themeColours.darkAccent : themeColours.accent,
         txt: isDark ? themeColours.darkTxt : themeColours.txt,
+        complete: "#3820F0",
+        selected: "#A020F0",
+        depths: Array.from({ length: 6 }, (_, i) => {
+            const depthScale = d3.scaleLinear()
+                .domain([1, 5])
+                .range(["#5ce65c", "#e60000"]); // Bright green to red
+            return depthScale(i);
+        })
     };
+    const scaledMin = 30*scaleFactor
+    const scaledMax = 60*scaleFactor
 
     useEffect(() => {
         if (!graphData) return;
@@ -26,12 +36,6 @@ const DynamicGraph = ({ graphData }) => {
 
         svg.selectAll('*').remove(); // Clear previous content
 
-        // Add background rectangle
-        // svg.append('rect')
-        //     .attr('width', width)
-        //     .attr('height', height)
-        //     .attr('fill', colours.background);
-
         const g = svg.append('g'); // Add a group to apply the transformations
 
         const zoom = d3.zoom().on('zoom', (event) => {
@@ -41,35 +45,33 @@ const DynamicGraph = ({ graphData }) => {
         svg.call(zoom);
 
         const simulation = d3.forceSimulation(graphData.nodes)
-            .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(150))
-            .force('charge', d3.forceManyBody().strength(-300))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(50));
+        .alpha(0.5) 
+        .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(150))
+        .force('charge', d3.forceManyBody().strength(-500))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(100))
+        .alphaTarget(0);
 
         const link = g.append('g')
-            .attr('stroke', colours.accent)
-            .attr('stroke-opacity', 1)
             .selectAll('line')
             .data(graphData.links)
             .enter().append('line')
+            .attr('stroke', link => {
+                const source = graphData.nodes.find(node => node.id === link.source.id);
+                const target = graphData.nodes.find(node => node.id === link.target.id);
+                if (source.depth < 0 && target.depth < 0) {
+                    return colors.txt
+                }
+                const lowestDepth = Math.min(source.depth, target.depth)
+                return colors.depths[lowestDepth]
+            })
+            .attr('stroke-opacity', 1)
             .attr('stroke-width', 2)
-            .on('click', (event, artist) => {
-                const source = graphData.nodes.find(node => node.id === artist.source.id);
-                const target = graphData.nodes.find(node => node.id === artist.target.id);
+            .on('click', (event, link) => {
+                const source = graphData.nodes.find(node => node.id === link.source.id);
+                const target = graphData.nodes.find(node => node.id === link.target.id);
                 console.log(`edge (${source.name} -> ${target.name}) clicked`);
             });
-
-        // const node = g.append('g')
-        //     .attr('stroke', colours.background2)
-        //     .attr('stroke-width', 1.5)
-        //     .selectAll('circle')
-        //     .data(graphData.nodes)
-        //     .enter().append('circle')
-        //     .attr('r', artist => artist.popularity / 5)
-        //     .attr('fill', artist => d3.interpolateViridis(artist.popularity / 100))
-        //     .on('click', (event, artist) => {
-        //         console.log(`node (${artist.name}) clicked`);
-        //     });
 
         const clipPath = svg.append('defs')
             .selectAll('clipPath')
@@ -77,20 +79,52 @@ const DynamicGraph = ({ graphData }) => {
             .enter().append('clipPath')
             .attr('id', d => `clip-${d.id}`)
             .append('circle')
-            .attr('r', d => d.popularity / 4);
+            .attr('r', d => {
+                const size = Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4));
+                return size;
+            });
 
         const node = g.append('g')
-            .attr('stroke', colours.background2)
-            .attr('stroke-width', 1.5)
-            .selectAll('image')
+            .selectAll('g')
             .data(graphData.nodes)
-            .enter().append('image')
+            .enter().append('g');
+
+        node.append('circle')
+            .attr('r', d => {
+                const size = Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4));
+                return size;
+            })
+            .attr('fill', 'none')
+            .attr('stroke', artist => {
+                if (artist.isSelected) {
+                    return colors.selected;
+                } else if (artist.isComplete) {
+                    return colors.complete;
+                } else {
+                    return colors.background2;
+                }
+            })
+            .attr('stroke-width', artist => {
+                if (artist.isSelected) {
+                    return 3; // Slightly larger stroke for selected and complete nodes
+                }
+                if (artist.isComplete) {
+                    return 4;
+                } else {
+                    return 2; // Default stroke width
+                }
+            });
+
+        node.append('image')
             .attr('xlink:href', artist => artist.artURL)
-            .attr('width', artist => artist.popularity / 2) // Adjust the size based on popularity or any other attribute
-            .attr('height', artist => artist.popularity / 2) // Adjust the size based on popularity or any other attribute
+            .attr('width', artist => Math.max(2*scaledMin, Math.min(2*scaledMax, (artist.popularity * scaleFactor) / 2)))
+            .attr('height', artist => Math.max(2*scaledMin, Math.min(2*scaledMax, (artist.popularity * scaleFactor) / 2)))
             .attr('clip-path', artist => `url(#clip-${artist.id})`)
+            .attr('x', d => -Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4)))
+            .attr('y', d => -Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4)))
             .on('click', (event, artist) => {
-                console.log(`node (${artist.name}) clicked`);
+                console.log(`node (${artist.name}) clicked : 
+                    depth: (${artist.depth})`);
             });
 
         node.append('title')
@@ -103,13 +137,8 @@ const DynamicGraph = ({ graphData }) => {
                 .attr('x2', d => d.target.x)
                 .attr('y2', d => d.target.y);
 
-            clipPath
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-
             node
-                .attr('x', d => d.x - d.popularity / 4)
-                .attr('y', d => d.y - d.popularity / 4);
+                .attr('transform', d => `translate(${d.x}, ${d.y})`);
         });
 
         function dragstarted(event, d) {
@@ -128,6 +157,11 @@ const DynamicGraph = ({ graphData }) => {
             d.fx = null;
             d.fy = null;
         }
+
+        // node.call(d3.drag()
+        //     .on('start', dragstarted)
+        //     .on('drag', dragged)
+        //     .on('end', dragended));
     }, [graphData]);
 
     return (
