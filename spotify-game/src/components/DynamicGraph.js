@@ -158,10 +158,10 @@ const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
             d.fy = null;
         }
 
-        // node.call(d3.drag()
-        //     .on('start', dragstarted)
-        //     .on('drag', dragged)
-        //     .on('end', dragended));
+        node.call(d3.drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended));
     }, [graphData]);
 
     return (

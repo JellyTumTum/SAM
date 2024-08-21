@@ -445,11 +445,10 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
     print(f"Artists connecting to {starting_artist.name} \n")
     await send_route_update(ws_connection, graph_manager, f"Connections for {starting_artist.name} added. ", starting_artist, 0, send_full_graph=send_full_graph)
     for artist in starting_artist.connections: 
-        print(f"artist.name = {artist.name}, ending_artist.name = {ending_artist.name}")
+        # print(f"artist.name = {artist.name}, ending_artist.name = {ending_artist.name}")
         if artist.id == ending_artist.id:
-            
             await send_route_update(ws_connection, graph_manager, f"Route Complete: {starting_artist.name} -> {ending_artist.name}. Found in 1 link.", ending_artist, 1, send_full_graph=send_full_graph)
-            graph_manager.finalise_graph()
+            graph_manager.finalise_graph(ending_artist)
             return RouteReply([ending_artist, starting_artist] if flipped_artists else [starting_artist, ending_artist], graph=graph_manager.get_graph())
     await set_selected_artist(ws_connection, ending_artist, graph_manager=graph_manager)
     ending_artist.connections = get_connections(ending_artist, db)

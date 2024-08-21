@@ -201,7 +201,7 @@ def get_artist_by_id(db: Session, artist_id: str) -> DtoArtist:
     db_artist = db.query(DbArtist).filter(DbArtist.id == artist_id).options(joinedload(DbArtist.genres), joinedload(DbArtist.connections)).first()
     if db_artist:
         genres = [genre.name for genre in db_artist.genres]
-        print(f"database connections for {db_artist.name} : {len(db_artist.connections)}. Length of Genres : {len(genres)}")
+        print(f"database connections for {db_artist.name} : {len(db_artist.connections)} + {len(db_artist.related_connections)}. Length of Genres : {len(genres)}")
         artist = DtoArtist(
             id=db_artist.id,
             artURL=db_artist.arturl,
@@ -222,17 +222,23 @@ def get_artist_connections(db: Session, artist: DbArtist) -> List[DtoArtist]:
     ).options(joinedload(DbConnection.artist), joinedload(DbConnection.related_artist)).all() # added joinedLoad options to fix out of session issues with cached artists. 
  
     # Get all related artists
-    related_artists: List[DtoArtist] = convert_raw_connections_to_artists(artist, connections)
+    for connection in artist.related_connections:
+        print(f"artist = {connection.artist_id}, related_artist = {connection.related_artist_id}")
+    related_artists: List[DtoArtist] = convert_raw_connections_to_artists(artist, set(connections + artist.related_connections), requires_connections=True)
     for artist in related_artists:
         if artist.name == 'Taylor Swift':
             print("ON SKIBIDI THIS SHIT WAS HERE WHY")
 
     return related_artists
 
-def convert_raw_connections_to_artists(db_artist: DbArtist, raw_connections: list[DbConnection], excluded_ids : List[str] = []) -> List[DtoArtist]:
+def convert_raw_connections_to_artists(db_artist: DbArtist, raw_connections: list[DbConnection], excluded_ids : List[str] = [], requires_connections: bool = True) -> List[DtoArtist]:
     
     related_artists = []
-    # print(f"converting raw connections for {db_artist.name}. raw connection count: {len(raw_connections)}")
+    for connection in raw_connections:
+        print(f"artist = {connection.artist_id}, related_artist = {connection.related_artist_id}")
+    if not requires_connections:
+        return []
+    print(f"converting raw connections for {db_artist.name}. raw connection count: {len(raw_connections)}. requires_connections={requires_connections}")
     for connection in raw_connections:
         related_artist = None
         excluded_artist = None
@@ -240,24 +246,26 @@ def convert_raw_connections_to_artists(db_artist: DbArtist, raw_connections: lis
             continue
         if connection.artist_id == db_artist.id:
             related_artist : DbArtist = connection.related_artist
-            print(f"Connection Found: {db_artist.name} -> {related_artist.name}")
+            # print(f"Connection Found: {db_artist.name} -> {related_artist.name}")
             excluded_artist = related_artist
-        elif connection.related_artist_id == db_artist:
+        elif connection.related_artist_id == db_artist.id:
             related_artist : DbArtist = connection.artist
             print(f"Connection Found: {related_artist.name} -> {db_artist.name}")
-            excluded_artist = db_artist
+            print(f"adding {related_artist} to excluded_ids")
+            excluded_artist = related_artist
         if related_artist != None:
+            requires_connections = False
             excluded_ids.append(excluded_artist.id)
             excluded_ids = set(excluded_ids)
             excluded_ids = list(excluded_ids)
-            print(f"convert_raw_connections_to_artists | Appending {excluded_artist.name}'s id to excluded_ids.")
+            # print(f"convert_raw_connections_to_artists | Appending {excluded_artist.name}'s id to excluded_ids.")
             # print(f"excluded_ids.size = {len(excluded_ids)}")
-            dtoArtist : DtoArtist = db_artist_to_dto_artist(related_artist, excluded_ids)
+            dtoArtist : DtoArtist = db_artist_to_dto_artist(related_artist, excluded_ids, requires_connections=requires_connections)
             related_artists.append(dtoArtist)
             # print(f"{db_artist.name}'s related_artists = [{', '.join([artist.name for artist in related_artists])}]")
     return related_artists
 
-def db_artist_to_dto_artist(db_artist: DbArtist, excluded_artists: List[str] = []) -> DtoArtist:
+def db_artist_to_dto_artist(db_artist: DbArtist, excluded_artists: List[str] = [], requires_connections: bool = True) -> DtoArtist:
     
     # if artist.is_full_artist:
     #     db_genre_list = save_artist_genres(get_db(), artist, artist.genres)
@@ -270,7 +278,7 @@ def db_artist_to_dto_artist(db_artist: DbArtist, excluded_artists: List[str] = [
         popularity=db_artist.popularity,
         lastUpdated=db_artist.last_updated,
         genres=[genre.name for genre in db_artist.genres], # db_artist.genres, -> used to be this but was erroring.
-        connections=convert_raw_connections_to_artists(db_artist, db_artist.connections, excluded_artists)
+        connections=convert_raw_connections_to_artists(db_artist, db_artist.connections, excluded_artists, requires_connections=requires_connections)
     )
 
 # Dependency to get DB session
