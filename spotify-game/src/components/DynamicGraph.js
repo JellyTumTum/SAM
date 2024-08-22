@@ -2,10 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import themeColours from '../themeColours';
 
-const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
+const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null }) => {
     const svgRef = useRef();
     const isDark = localStorage.getItem('darkMode') === 'true';
-    const colors = { // American spellchecker forcing me to use colors to avoid annoying squiggly lines.
+    const colors = {
         background: isDark ? themeColours.darkBackground : themeColours.background,
         background2: isDark ? themeColours.darkBackground2 : themeColours.background2,
         primary: isDark ? themeColours.darkPrimary : themeColours.primary,
@@ -21,8 +21,8 @@ const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
             return depthScale(i);
         })
     };
-    const scaledMin = 30*scaleFactor
-    const scaledMax = 60*scaleFactor
+    const scaledMin = 50 * scaleFactor;
+    const scaledMax = 100 * scaleFactor;
 
     useEffect(() => {
         if (!graphData) return;
@@ -30,27 +30,50 @@ const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
         const width = svgRef.current.clientWidth;
         const height = svgRef.current.clientHeight;
 
-        const svg = d3.select(svgRef.current)
+        let svg = d3.select(svgRef.current);
+        let zoomTransform = d3.zoomIdentity; // Initialize the zoom transform
+
+        // Preserve the current zoom level if it's already set
+        if (svgRef.current.__zoom) {
+            zoomTransform = svgRef.current.__zoom;
+        }
+
+        svg = svg
             .attr('width', width)
             .attr('height', height);
 
-        svg.selectAll('*').remove(); // Clear previous content
+        svg.selectAll('*').remove();
 
         const g = svg.append('g'); // Add a group to apply the transformations
 
         const zoom = d3.zoom().on('zoom', (event) => {
             g.attr('transform', event.transform);
+            svgRef.current.__zoom = event.transform; // Store the current zoom transform
         });
 
-        svg.call(zoom);
+        svg.call(zoom).call(zoom.transform, zoomTransform); // Reapply the previous zoom level
+
+
+        // Sets initial positions and velocities based on previous graph data
+        graphData.nodes.forEach(node => {
+            if (prevGraphData) {
+                const prevNode = prevGraphData.nodes.find(prev => prev.id === node.id);
+                if (prevNode) {
+                    node.x = prevNode.x;
+                    node.y = prevNode.y;
+                    node.vx = prevNode.vx;
+                    node.vy = prevNode.vy;
+                }
+            }
+        });
 
         const simulation = d3.forceSimulation(graphData.nodes)
-        .alpha(0.5) 
-        .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(150))
-        .force('charge', d3.forceManyBody().strength(-500))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(100))
-        .alphaTarget(0);
+            .alpha(0.5)
+            .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(150))
+            .force('charge', d3.forceManyBody().strength(-500))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(150))
+            .alphaTarget(0);
 
         const link = g.append('g')
             .selectAll('line')
@@ -59,18 +82,26 @@ const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
             .attr('stroke', link => {
                 const source = graphData.nodes.find(node => node.id === link.source.id);
                 const target = graphData.nodes.find(node => node.id === link.target.id);
-                if (source.depth < 0 && target.depth < 0) {
-                    return colors.txt
+                if (link.inRoute) {
+                    console.log(`edge (${source.name} -> ${target.name}) marked as inRoute`)
+                    return colors.selected
                 }
-                const lowestDepth = Math.min(source.depth, target.depth)
-                return colors.depths[lowestDepth]
+                if (source.depth < 0 && target.depth < 0) {
+                    return colors.txt;
+                }
+                const lowestDepth = Math.min(source.depth, target.depth);
+                return colors.depths[lowestDepth];
             })
             .attr('stroke-opacity', 1)
-            .attr('stroke-width', 2)
+            .attr('stroke-width', link => {
+                if (link.inRoute) { return scaledMin / 10 }
+                else {return scaledMin / 25}
+            })
             .on('click', (event, link) => {
                 const source = graphData.nodes.find(node => node.id === link.source.id);
                 const target = graphData.nodes.find(node => node.id === link.target.id);
                 console.log(`edge (${source.name} -> ${target.name}) clicked`);
+                console.log(link)
             });
 
         const clipPath = svg.append('defs')
@@ -106,25 +137,25 @@ const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
             })
             .attr('stroke-width', artist => {
                 if (artist.isSelected) {
-                    return 3; // Slightly larger stroke for selected and complete nodes
+                    return scaledMin / 8; // Slightly larger stroke for selected and complete nodes
                 }
                 if (artist.isComplete) {
-                    return 4;
+                    return scaledMin / 6;
                 } else {
-                    return 2; // Default stroke width
+                    return scaledMin / 12; // Default stroke width
                 }
             });
 
         node.append('image')
             .attr('xlink:href', artist => artist.artURL)
-            .attr('width', artist => Math.max(2*scaledMin, Math.min(2*scaledMax, (artist.popularity * scaleFactor) / 2)))
-            .attr('height', artist => Math.max(2*scaledMin, Math.min(2*scaledMax, (artist.popularity * scaleFactor) / 2)))
+            .attr('width', artist => Math.max(2 * scaledMin, Math.min(2 * scaledMax, (artist.popularity * scaleFactor) / 2)))
+            .attr('height', artist => Math.max(2 * scaledMin, Math.min(2 * scaledMax, (artist.popularity * scaleFactor) / 2)))
             .attr('clip-path', artist => `url(#clip-${artist.id})`)
             .attr('x', d => -Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4)))
             .attr('y', d => -Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4)))
             .on('click', (event, artist) => {
-                console.log(`node (${artist.name}) clicked : 
-                    depth: (${artist.depth})`);
+                console.log(`node (${artist.name}) clicked`);
+                console.log(artist)
             });
 
         node.append('title')
@@ -158,10 +189,10 @@ const DynamicGraph = ({ graphData, scaleFactor=1 }) => {
             d.fy = null;
         }
 
-        node.call(d3.drag()
-            .on('start', dragstarted)
-            .on('drag', dragged)
-            .on('end', dragended));
+        // node.call(d3.drag()
+        //     .on('start', dragstarted)
+        //     .on('drag', dragged)
+        //     .on('end', dragended));
     }, [graphData]);
 
     return (

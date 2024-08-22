@@ -222,8 +222,6 @@ def get_artist_connections(db: Session, artist: DbArtist) -> List[DtoArtist]:
     ).options(joinedload(DbConnection.artist), joinedload(DbConnection.related_artist)).all() # added joinedLoad options to fix out of session issues with cached artists. 
  
     # Get all related artists
-    for connection in artist.related_connections:
-        print(f"artist = {connection.artist_id}, related_artist = {connection.related_artist_id}")
     related_artists: List[DtoArtist] = convert_raw_connections_to_artists(artist, set(connections + artist.related_connections), requires_connections=True)
     for artist in related_artists:
         if artist.name == 'Taylor Swift':
@@ -234,8 +232,6 @@ def get_artist_connections(db: Session, artist: DbArtist) -> List[DtoArtist]:
 def convert_raw_connections_to_artists(db_artist: DbArtist, raw_connections: list[DbConnection], excluded_ids : List[str] = [], requires_connections: bool = True) -> List[DtoArtist]:
     
     related_artists = []
-    for connection in raw_connections:
-        print(f"artist = {connection.artist_id}, related_artist = {connection.related_artist_id}")
     if not requires_connections:
         return []
     print(f"converting raw connections for {db_artist.name}. raw connection count: {len(raw_connections)}. requires_connections={requires_connections}")

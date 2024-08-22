@@ -96,7 +96,6 @@ class Artist(BaseModel):
         instance.connections = None
         return instance
 
-
 # After the class definition, you need to update forward references
 Artist.model_rebuild()
 
@@ -174,8 +173,9 @@ class GraphArtist(BaseModel):
     depth: int
     is_complete: bool = False
     is_selected: bool = False
+    connectionCount: int = 0
     
-    def __init__(self, artist: Artist, depth, is_complete=False, is_selected=False):
+    def __init__(self, artist: Artist, depth, is_complete=False, is_selected=False, connectionCount=0):
         super().__init__(
             id=artist.id, 
             artURL=artist.artURL, 
@@ -186,7 +186,8 @@ class GraphArtist(BaseModel):
             genres=artist.genres, 
             depth=depth, 
             is_complete=is_complete,
-            is_selected=is_selected
+            is_selected=is_selected,
+            connectionCount=connectionCount
         )
         
     def set_complete(self):
@@ -222,6 +223,7 @@ class GraphConnection(BaseModel):
     
     source: str # id of a GraphArtist
     target: str # id of a GraphArtist
+    inRoute: bool = False
     
     def __init__(self, source: str, target: str):
         super().__init__(
@@ -256,11 +258,12 @@ class GraphStructure(BaseModel):
         has_connections = artist.connections != None and len(artist.connections) > 1
         if (self.contains_artist(artist)):
             self.artist_dict[artist.id].depth = depth
+            self.artist_dict[artist.id].connectionCount = len(artist.connections)
             if has_connections:
                 self.set_complete(artist)
                 return_value = artist.id
         else:
-            graph_artist = GraphArtist(artist, depth, is_complete=has_connections, is_selected=False)
+            graph_artist = GraphArtist(artist, depth, is_complete=has_connections, is_selected=False, connectionCount=len(artist.connections))
             self.nodes.add(graph_artist)
             self.artist_dict[artist.id] = graph_artist
             
@@ -274,7 +277,7 @@ class GraphStructure(BaseModel):
                         new_depth = -2
                     else:
                         new_depth = depth+1
-                    connectionArtist = GraphArtist(connection, new_depth, is_complete=False, is_selected=False)
+                    connectionArtist = GraphArtist(connection, new_depth, is_complete=False, is_selected=False, connectionCount=1)
                     self.nodes.add(connectionArtist)
                     self.artist_dict[connectionArtist.id] = connectionArtist
                 else:
@@ -314,15 +317,16 @@ class GraphStructure(BaseModel):
             self.artist_dict[artist.id].set_selected()
         self.current_selected_artist_id = artist.id
         
-    def finalise(self, ending_artist):
+    def finalise(self, ending_artist, route_list):
         
         required_links = []
+        crucial_ids = [artist.id for artist in route_list]
         for link in self.links:
             if link.source == ending_artist.id:
                 required_links.append(link)
-            # may require below line if links are missing.
-            # if link.target == ending_artist.id:
-            #     required_links.append(link)
+            # for finding the pathway to highlight it   
+            if link.source in crucial_ids and link.target in crucial_ids:
+                link.inRoute = True
         for link in required_links:
             if self.artist_dict[link.target].depth < 0:
                 print(f"finalisation: adjusting {self.artist_dict[link.target].name}'s depth from {self.artist_dict[link.target].depth} to {self.artist_dict[link.source].depth + 1}")
@@ -363,9 +367,9 @@ class GraphManager(BaseModel):
     def get_graph(self):
         return self.full_graph
     
-    def finalise_graph(self, ending_artist):
+    def finalise_graph(self, ending_artist: Artist, route_list: List[Artist]):
         
-        self.full_graph.finalise(ending_artist)
+        self.full_graph.finalise(ending_artist, route_list)
         
     
     def to_dict(self):

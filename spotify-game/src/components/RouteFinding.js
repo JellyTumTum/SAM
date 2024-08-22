@@ -12,6 +12,7 @@ const RouteFinding = () => {
 
     // graph logic
     const [selectedArtistID, setSelectedArtistID] = useState(null);
+    const [prevGraphData, setPrevGraphData] = useState(null);
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [displayMessage, setDisplayMessage] = useState(null);
     const routeFound = useRef(false);
@@ -115,13 +116,14 @@ const RouteFinding = () => {
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
                     if (data.full_graph) {
+                        setPrevGraphData(graphData)
                         setGraphData(data.graph)
                     }
                     else {
                         // 2. Add all new additions to the graph
                         data.graph_additions['nodes'][0].isSelected = true
                         setSelectedArtistID(data.graph_additions['nodes'][0].id)
-                        setGraphData(prevGraphData => mergeGraphData(prevGraphData, data.graph_additions));
+                        setGraphData(oldGraphData => mergeGraphData(oldGraphData, data.graph_additions));
                     }
                     // 3. Set the starting node as selected.
                 }
@@ -138,6 +140,7 @@ const RouteFinding = () => {
                     setDisplayMessage(data.message);
                     console.log("RouteFound = " + routeFound + " message = " + data.message)
                     if (data.full_graph) {
+                        setPrevGraphData(graphData)
                         setGraphData(data.graph)
                     }
                     else {
@@ -163,6 +166,7 @@ const RouteFinding = () => {
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
                     if (data.full_graph) {
+                        setPrevGraphData(graphData)
                         setGraphData(data.graph)
                     }
                     else {
@@ -214,6 +218,11 @@ const RouteFinding = () => {
         }
     };
 
+    const printGraphData = async () => {
+        console.log("PRINTING GRAPH DATA: ")
+        console.log(graphData)
+    }
+
     const handleFindRoute = async () => {
         routeFound.current = false
         ensureWebSocketConnection(async () => {
@@ -227,7 +236,10 @@ const RouteFinding = () => {
                     });
                     setFindRouteString("Find Route");
                     console.log('Route:', response.data.route_list);
+                    console.log("Final Graph: ")
+                    console.log(response.data.graph)
                     setDisplayMessage('Route: ' + response.data.route_list.map(artist => artist.name).join(' -> '));
+                    setPrevGraphData(graphData)
                     setGraphData(response.data.graph)
                     routeFound.current = true
                 } catch (error) {
@@ -258,6 +270,9 @@ const RouteFinding = () => {
             <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
                 <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">{findRouteString}</Button>
             </div>
+            <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
+                <Button onClick={printGraphData} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">Print Graph Data</Button>
+            </div>
             <div className="mt-5">
                 {displayMessage ? (
                     <p className="text-txt dark:text-darkTxt">{displayMessage}</p>
@@ -266,7 +281,7 @@ const RouteFinding = () => {
                 )}
             </div>
             <div className="w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
-                {graphData.nodes.length > 0 && <DynamicGraph graphData={graphData} />}
+                {graphData.nodes.length > 0 && <DynamicGraph graphData={graphData} prevGraphData={prevGraphData} />}
             </div>
         </div>
     );
@@ -276,10 +291,14 @@ export default RouteFinding;
 
 
 /*
-TODO: 
-- Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
 
-Try to find a way for the graph spawning to be less explosive. 
+BUGS:
+    - Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
+
+TODO:
+    - Figure out way to form clusters around people with large connection values, essnetially like they are planets with lesser artists orbiting. 
+        - probably try make a repulsion force towards other artists, that is lessened if they have a connection with the central artist.     
+
 Add adjusters for the physics factors 
     -> UI Redesign so the viewing window is a lot bigger.
         -> Add a connection symbol that notes if a websocket connection is present. 
