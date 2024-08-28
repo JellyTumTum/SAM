@@ -234,6 +234,7 @@ const RouteFinding = () => {
                         ending_artist: endArtist,
                         websocket_id: wsId
                     });
+                    routeFound.current = true
                     setFindRouteString("Find Route");
                     console.log('Route:', response.data.route_list);
                     console.log("Final Graph: ")
@@ -241,7 +242,6 @@ const RouteFinding = () => {
                     setDisplayMessage('Route: ' + response.data.route_list.map(artist => artist.name).join(' -> '));
                     setPrevGraphData(graphData)
                     setGraphData(response.data.graph)
-                    routeFound.current = true
                 } catch (error) {
                     console.error('Error finding route:', error);
                 }
@@ -281,7 +281,7 @@ const RouteFinding = () => {
                 )}
             </div>
             <div className="w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
-                {graphData.nodes.length > 0 && <DynamicGraph graphData={graphData} prevGraphData={prevGraphData} />}
+                {graphData.nodes.length > 0 && <DynamicGraph graphData={graphData} prevGraphData={prevGraphData} completeGraph={routeFound.current} />}
             </div>
         </div>
     );
@@ -296,7 +296,7 @@ BUGS:
     - Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
 
 TODO:
-    - Figure out way to form clusters around people with large connection values, essnetially like they are planets with lesser artists orbiting. 
+    - Figure out way to form clusters around people with large connection values, essentially like they are planets with lesser artists orbiting. 
         - probably try make a repulsion force towards other artists, that is lessened if they have a connection with the central artist.     
 
 Add adjusters for the physics factors 
