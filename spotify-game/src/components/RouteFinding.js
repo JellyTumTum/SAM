@@ -15,7 +15,7 @@ const RouteFinding = () => {
     const [prevGraphData, setPrevGraphData] = useState(null);
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [displayMessage, setDisplayMessage] = useState(null);
-    const routeFound = useRef(false);
+    const routeFound = useRef(true);
     // const [selectionMessage, setSelectionMessage] = useState(null);
 
     const [ws, setWs] = useState(null);
@@ -228,6 +228,8 @@ const RouteFinding = () => {
         ensureWebSocketConnection(async () => {
             if (startingArtist && endArtist) {
                 try {
+                    routeFound.current = false;
+                    console.log("Setting ForceMinimizeSelectors to true");
                     setFindRouteString("Finding Route...")
                     const response = await axios.post('http://localhost:8000/routes/find', {
                         starting_artist: startingArtist,
@@ -263,10 +265,7 @@ const RouteFinding = () => {
             </div>
 
             <p className="text-txt dark:text-darkTxt m-5">websocket id = {wsId}</p>
-            <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0 bg-background dark:bg-darkBackground">
-                <ArtistSelectionCard title="Starting Artist" selectedArtist={startingArtist} setSelectedArtist={setStartingArtist} />
-                <ArtistSelectionCard title="End Artist" selectedArtist={endArtist} setSelectedArtist={setEndArtist} />
-            </div>
+
             <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
                 <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">{findRouteString}</Button>
             </div>
@@ -280,11 +279,38 @@ const RouteFinding = () => {
                     <p className="text-txt dark:text-darkTxt">Status Messages will display here</p>
                 )}
             </div>
-            <div className="w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
-                {graphData.nodes.length > 0 && <DynamicGraph graphData={graphData} prevGraphData={prevGraphData} completeGraph={routeFound.current} />}
+
+            {/* Main Graph Container */}
+            <div className="relative w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
+                {/* Artist Selection Cards */}
+                <div className="absolute top-4 left-4">
+                    <ArtistSelectionCard
+                        title="Starting Artist"
+                        selectedArtist={startingArtist}
+                        setSelectedArtist={setStartingArtist}
+                    />
+                </div>
+                <div className="absolute top-4 right-4">
+                    <ArtistSelectionCard
+                        title="End Artist"
+                        selectedArtist={endArtist}
+                        setSelectedArtist={setEndArtist}
+
+                    />
+                </div>
+
+                {/* Dynamic Graph */}
+                {graphData.nodes.length > 0 && (
+                    <DynamicGraph
+                        graphData={graphData}
+                        prevGraphData={prevGraphData}
+                        completeGraph={routeFound.current}
+                    />
+                )}
             </div>
         </div>
     );
+
 };
 
 export default RouteFinding;
@@ -294,10 +320,13 @@ export default RouteFinding;
 
 BUGS:
     - Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
+    - When found in one link there is no complete lines. 
 
 TODO:
-    - Figure out way to form clusters around people with large connection values, essentially like they are planets with lesser artists orbiting. 
-        - probably try make a repulsion force towards other artists, that is lessened if they have a connection with the central artist.     
+    - Figure out a way to hide the artist selectors. 
+    - Add artist displays for both when clicking a node and edge. 
+    - Move the stuff form the top to make more room for the graph.
+    - Ways to centralise nodes based on selected artists? (if selected fro mthe route mapping) 
 
 Add adjusters for the physics factors 
     -> UI Redesign so the viewing window is a lot bigger.

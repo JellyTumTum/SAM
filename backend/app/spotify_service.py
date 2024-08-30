@@ -422,6 +422,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
     if starting_artist.id == ending_artist.id: 
         return RouteReply([starting_artist], graph=None)
         
+    found = False
     artist_route = [] # return value 
     starting_artist = starting_artist
     checked_artists: List[Tuple[Artist, bool]] = []
@@ -447,10 +448,8 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
     for artist in starting_artist.connections: 
         # print(f"artist.name = {artist.name}, ending_artist.name = {ending_artist.name}")
         if artist.id == ending_artist.id:
-            await send_route_update(ws_connection, graph_manager, f"Route Complete: {starting_artist.name} -> {ending_artist.name}. Found in 1 link.", ending_artist, 1, send_full_graph=send_full_graph)
-            route_list = [ending_artist, starting_artist] if flipped_artists else [starting_artist, ending_artist]
-            graph_manager.finalise_graph(ending_artist, route_list)
-            return RouteReply(route_list, graph=graph_manager.get_graph())
+            found = True
+            
     await set_selected_artist(ws_connection, ending_artist, graph_manager=graph_manager)
     ending_artist.connections = get_connections(ending_artist, db)
     save_artist(db, ending_artist)
@@ -467,8 +466,16 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
         unchecked_artists.append((artist, 1, -1, [starting_artist]))
     if db:
         save_artist(db, starting_artist)
+    if found:
+        route_list = [ending_artist, starting_artist] if flipped_artists else [starting_artist, ending_artist]
+        await send_route_update(ws_connection, graph_manager, f"Route Complete: {starting_artist.name} -> {ending_artist.name}. Found in 1 link.", ending_artist, 1, send_full_graph=send_full_graph)
+        graph_manager.finalise_graph(ending_artist, route_list)
+        route_reply = RouteReply(
+        route_list=route_list,
+        graph=graph_manager.get_graph() if send_full_graph else None
+        )
+        return route_reply
     
-    found = False
     potential_end = check_if_complete(starting_artist, checked_artists, ending_artist)
     if potential_end != []:
         # to check if target_artist or connecting artist is used

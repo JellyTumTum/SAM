@@ -162,7 +162,7 @@ const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, comple
                 const source = graphData.nodes.find(node => node.id === link.source.id);
                 const target = graphData.nodes.find(node => node.id === link.target.id);
                 if (link.inRoute) {
-                    console.log(`edge (${source.name} -> ${target.name}) marked as inRoute`)
+                    // console.log(`edge (${source.name} -> ${target.name}) marked as inRoute`)
                     return colors.selected
                 }
                 if (source.depth < 0 && target.depth < 0) {
