@@ -3,6 +3,7 @@ import ArtistSelectionCard from './ArtistSelectionCard';
 import { Button, Typography } from '@material-tailwind/react';
 import axios from 'axios';
 import DynamicGraph from './DynamicGraph';
+import ShowcaseArtist from './ShowcaseArtist';
 
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 
@@ -17,6 +18,14 @@ const RouteFinding = () => {
     const [displayMessage, setDisplayMessage] = useState(null);
     const routeFound = useRef(true);
     // const [selectionMessage, setSelectionMessage] = useState(null);
+
+    // UI Information
+    const [hideSelectors, setHideSelectors] = useState(false);
+
+    // Showcase variables
+    const [showcaseArtist, setShowcaseArtist] = useState(null);
+    const [edgeArtist1, setEdgeArtist1] = useState(null);
+    const [edgeArtist2, setEdgeArtist2] = useState(null);
 
     const [ws, setWs] = useState(null);
     const [wsId, setWsId] = useState(null);
@@ -224,12 +233,12 @@ const RouteFinding = () => {
     }
 
     const handleFindRoute = async () => {
-        routeFound.current = false
         ensureWebSocketConnection(async () => {
             if (startingArtist && endArtist) {
                 try {
                     routeFound.current = false;
-                    console.log("Setting ForceMinimizeSelectors to true");
+                    setHideSelectors(true);
+                    console.log("Setting HideSelectors to true");
                     setFindRouteString("Finding Route...")
                     const response = await axios.post('http://localhost:8000/routes/find', {
                         starting_artist: startingArtist,
@@ -238,6 +247,7 @@ const RouteFinding = () => {
                     });
                     routeFound.current = true
                     setFindRouteString("Find Route");
+                    setHideSelectors(false);
                     console.log('Route:', response.data.route_list);
                     console.log("Final Graph: ")
                     console.log(response.data.graph)
@@ -253,6 +263,24 @@ const RouteFinding = () => {
         });
     };
 
+    // Add update functions for selected artist and edge
+    const handleNodeSelect = (artist) => {
+        setShowcaseArtist(artist);
+        if (artist != null) {
+            handleEdgeSelect(null, null); // Clear edge selection when a node is selected
+        }
+
+    };
+
+    const handleEdgeSelect = (edgeNode1, edgeNode2) => {
+        setEdgeArtist1(edgeNode1);
+        setEdgeArtist2(edgeNode2);
+        if (edgeNode1 != null && edgeNode2 != null) {
+            handleNodeSelect(null); // Clear edge selection when a node is selected
+        }
+
+    };
+
     return (
         <div className="flex flex-col items-center h-full dark:bg-darkBackground bg-background relative">
             {/* Status Indicator */}
@@ -266,12 +294,13 @@ const RouteFinding = () => {
 
             <p className="text-txt dark:text-darkTxt m-5">websocket id = {wsId}</p>
 
-            <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
+            {/* old findRoute button */}
+            {/* <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
                 <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">{findRouteString}</Button>
-            </div>
-            <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
+            </div> */}
+            {/* <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
                 <Button onClick={printGraphData} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">Print Graph Data</Button>
-            </div>
+            </div> */}
             <div className="mt-5">
                 {displayMessage ? (
                     <p className="text-txt dark:text-darkTxt">{displayMessage}</p>
@@ -281,23 +310,56 @@ const RouteFinding = () => {
             </div>
 
             {/* Main Graph Container */}
+
             <div className="relative w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
+
+
+
                 {/* Artist Selection Cards */}
                 <div className="absolute top-4 left-4">
                     <ArtistSelectionCard
                         title="Starting Artist"
                         selectedArtist={startingArtist}
                         setSelectedArtist={setStartingArtist}
+                        minimize={hideSelectors}
+                        setHideSelectors={setHideSelectors}
                     />
                 </div>
+
+
+
                 <div className="absolute top-4 right-4">
                     <ArtistSelectionCard
                         title="End Artist"
                         selectedArtist={endArtist}
                         setSelectedArtist={setEndArtist}
-
+                        minimize={hideSelectors}
+                        setHideSelectors={setHideSelectors}
                     />
                 </div>
+
+                {/* Button Between Selection Cards */}
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex w-[calc(100%-45rem)] justify-center">
+                    <Button onClick={handleFindRoute} className="w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt">
+                        {findRouteString}
+                    </Button>
+                </div>
+
+                {showcaseArtist && (
+                    <div className="absolute bottom-4 left-4">
+                        <ShowcaseArtist artist={showcaseArtist} onClose={() => handleNodeSelect(null)} />
+                    </div>
+                )}
+                {edgeArtist1 && edgeArtist2 && (
+                    <>
+                        <div className="absolute bottom-4 left-4">
+                            <ShowcaseArtist artist={edgeArtist1} onClose={() => handleEdgeSelect(null, null)} />
+                        </div>
+                        <div className="absolute bottom-4 right-4">
+                            <ShowcaseArtist artist={edgeArtist2} onClose={() => handleEdgeSelect(null, null)} />
+                        </div>
+                    </>
+                )}
 
                 {/* Dynamic Graph */}
                 {graphData.nodes.length > 0 && (
@@ -305,6 +367,8 @@ const RouteFinding = () => {
                         graphData={graphData}
                         prevGraphData={prevGraphData}
                         completeGraph={routeFound.current}
+                        onNodeSelect={handleNodeSelect}
+                        onEdgeSelect={handleEdgeSelect}
                     />
                 )}
             </div>
@@ -326,7 +390,7 @@ TODO:
     - Figure out a way to hide the artist selectors. 
     - Add artist displays for both when clicking a node and edge. 
     - Move the stuff form the top to make more room for the graph.
-    - Ways to centralise nodes based on selected artists? (if selected fro mthe route mapping) 
+    - Ways to centralise nodes based on selected artists? (if selected from the route mapping) 
 
 Add adjusters for the physics factors 
     -> UI Redesign so the viewing window is a lot bigger.

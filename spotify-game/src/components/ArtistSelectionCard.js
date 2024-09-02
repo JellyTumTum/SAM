@@ -11,7 +11,7 @@ import {
 } from '@material-tailwind/react';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
-const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimize=false }) => {
+const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimize=false, setHideSelectors }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -26,6 +26,10 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimiz
     setSearchQuery(''); // Clear search field
     setDropdownOpen(false); // Close dropdown on select
   };
+
+  useEffect(() => {
+    setMinimized(minimize);
+  }, [minimize]);
 
   const handleInputChange = async (e) => {
     const query = e.target.value;
@@ -48,7 +52,7 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimiz
   };
 
   // Toggle minimize/maximize state
-  const toggleMinimize = () => setMinimized((prev) => !prev);
+  const toggleMinimize = () => setHideSelectors((prev) => !prev);
 
   // Handle keyboard navigation
   const handleKeyDown = (e) => {
@@ -87,6 +91,8 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimiz
     };
   }, [dropdownOpen, searchResults, highlightedIndex]);
 
+
+
   return (
     <Card
       ref={cardRef}
@@ -95,7 +101,7 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimiz
       } w-80 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg p-4 flex flex-col justify-between items-center mb-2 border-accent dark:border-darkAccent relative`}
     >
       {/* Minimize/Expand Icon */}
-      <div className={`absolute mt-2 top-2 ${placeLeft ? 'left-2' : 'right-2'} cursor-pointer`} onClick={toggleMinimize}>
+      <div className={`absolute mt-2 top-2 ${placeLeft ? 'left-3' : 'right-3'} cursor-pointer`} onClick={toggleMinimize}>
         {minimized ? (
           <EyeSlashIcon className="h-6 w-6 text-txt dark:text-darkTxt transition-transform duration-300 transform hover:rotate-180" />
         ) : (

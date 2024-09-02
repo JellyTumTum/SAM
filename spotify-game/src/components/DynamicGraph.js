@@ -10,7 +10,7 @@ ADDITIONS / ADJUSTMENTS:
 
 */
 
-const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, completeGraph = false }) => {
+const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, completeGraph = false, onNodeSelect, onEdgeSelect }) => {
     const svgRef = useRef();
     const isDark = localStorage.getItem('darkMode') === 'true';
     const colors = {
@@ -179,8 +179,8 @@ const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, comple
             .on('click', (event, link) => {
                 const source = graphData.nodes.find(node => node.id === link.source.id);
                 const target = graphData.nodes.find(node => node.id === link.target.id);
+                onEdgeSelect(source, target);
                 console.log(`edge (${source.name} -> ${target.name}) clicked`);
-                console.log(link)
             });
 
         const clipPath = svg.append('defs')
@@ -233,6 +233,7 @@ const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, comple
             .attr('x', d => -Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4)))
             .attr('y', d => -Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4)))
             .on('click', (event, artist) => {
+                onNodeSelect(artist);
                 console.log(`node (${artist.name}) clicked`);
                 console.log(artist)
             });
