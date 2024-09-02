@@ -28,7 +28,7 @@ const ShowcaseArtist = ({ artist, onClose }) => {
     return (
         <Card
             ref={cardRef}
-            className="transition-all duration-300 ease-in-out overflow-visible h-36 w-96 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg p-4 flex flex-row justify-start items-center mb-2 border-accent dark:border-darkAccent relative"
+            className="transition-all duration-300 ease-in-out overflow-visible h-28 w-auto bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg p-4 flex flex-row justify-start items-center mb-2 border-accent dark:border-darkAccent relative"
         >
             {/* Close Icon */}
             <div className="absolute top-2 right-2 cursor-pointer" onClick={onClose}>

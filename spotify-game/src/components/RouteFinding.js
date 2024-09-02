@@ -4,6 +4,7 @@ import { Button, Typography } from '@material-tailwind/react';
 import axios from 'axios';
 import DynamicGraph from './DynamicGraph';
 import ShowcaseArtist from './ShowcaseArtist';
+import StatusDisplay from './StatusDisplay';
 
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 
@@ -16,6 +17,8 @@ const RouteFinding = () => {
     const [prevGraphData, setPrevGraphData] = useState(null);
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [displayMessage, setDisplayMessage] = useState(null);
+    const [secondaryMessage, setSecondaryMessage] = useState(null)
+    const [progressBarPercent, setProgressBarPercent] = useState(null);
     const routeFound = useRef(true);
     // const [selectionMessage, setSelectionMessage] = useState(null);
 
@@ -169,8 +172,8 @@ const RouteFinding = () => {
                     // Update graphData here
                     /* structure of data:
                     {"update_type": "selection", 
-                        "message": f"Artist selected for expansion : {selected_artist.name}", 
-                        "artist_id": selected_artist.id}
+                     "message": f"Artist selected for expansion : {selected_artist.name}", 
+                     "artist_id": selected_artist.id}
                     */
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
@@ -187,6 +190,16 @@ const RouteFinding = () => {
                             links: [...prevGraphData.links]
                         }));
                     }
+                }
+
+                if (data.update_type === "status") {
+                    /* Structure of Data:
+                    {"update_type": "status",
+                     "message": display_message,
+                     "progress": progress_bar}
+                    */
+                    setSecondaryMessage(data.message)
+                    setProgressBarPercent(data.progress_bar_percent)
                 }
 
             }
@@ -247,7 +260,6 @@ const RouteFinding = () => {
                     });
                     routeFound.current = true
                     setFindRouteString("Find Route");
-                    setHideSelectors(false);
                     console.log('Route:', response.data.route_list);
                     console.log("Final Graph: ")
                     console.log(response.data.graph)
@@ -301,20 +313,10 @@ const RouteFinding = () => {
             {/* <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
                 <Button onClick={printGraphData} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">Print Graph Data</Button>
             </div> */}
-            <div className="mt-5">
-                {displayMessage ? (
-                    <p className="text-txt dark:text-darkTxt">{displayMessage}</p>
-                ) : (
-                    <p className="text-txt dark:text-darkTxt">Status Messages will display here</p>
-                )}
-            </div>
 
             {/* Main Graph Container */}
 
             <div className="relative w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
-
-
-
                 {/* Artist Selection Cards */}
                 <div className="absolute top-4 left-4">
                     <ArtistSelectionCard
@@ -325,8 +327,6 @@ const RouteFinding = () => {
                         setHideSelectors={setHideSelectors}
                     />
                 </div>
-
-
 
                 <div className="absolute top-4 right-4">
                     <ArtistSelectionCard
@@ -339,26 +339,44 @@ const RouteFinding = () => {
                 </div>
 
                 {/* Button Between Selection Cards */}
-                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex w-[calc(100%-45rem)] justify-center">
+                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex w-[calc(100%-45rem)] justify-center md:flex-1">
                     <Button onClick={handleFindRoute} className="w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt">
                         {findRouteString}
                     </Button>
                 </div>
 
+                {/* Showcase Artists */}
                 {showcaseArtist && (
-                    <div className="absolute bottom-4 left-4">
+                    <div className={`absolute ${routeFound.current ? 'bottom-16' : 'bottom-24'} left-4`}>
+                        {/* Adjusted to place above the status display */}
                         <ShowcaseArtist artist={showcaseArtist} onClose={() => handleNodeSelect(null)} />
                     </div>
                 )}
+
                 {edgeArtist1 && edgeArtist2 && (
                     <>
-                        <div className="absolute bottom-4 left-4">
+                        <div className={`absolute ${routeFound.current ? 'bottom-16' : 'bottom-24'} left-4`}>
+                            {/* Adjusted to place above the status display */}
                             <ShowcaseArtist artist={edgeArtist1} onClose={() => handleEdgeSelect(null, null)} />
                         </div>
-                        <div className="absolute bottom-4 right-4">
+                        <div className={`absolute ${routeFound.current ? 'bottom-16' : 'bottom-24'} right-4`}>
+                            {/* Adjusted to place above the status display */}
                             <ShowcaseArtist artist={edgeArtist2} onClose={() => handleEdgeSelect(null, null)} />
                         </div>
                     </>
+                )}
+
+                {/* Status Display */}
+                {hideSelectors && graphData.nodes.length > 0 && (
+                    <div className="absolute bottom-4 left-4 right-4">
+                        {/* Takes full width at the bottom with margins adjusted */}
+                        <StatusDisplay
+                            primaryMessage={displayMessage}
+                            secondaryMessage={secondaryMessage}
+                            progress_bar_percent={null}
+                            complete_route={routeFound.current}
+                        />
+                    </div>
                 )}
 
                 {/* Dynamic Graph */}
@@ -385,10 +403,9 @@ export default RouteFinding;
 BUGS:
     - Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
     - When found in one link there is no complete lines. 
+    - Longer Searches seem to fail, both http timeout (30s) is reached and the websocket collapses somehow
 
-TODO:
-    - Figure out a way to hide the artist selectors. 
-    - Add artist displays for both when clicking a node and edge. 
+TODO: 
     - Move the stuff form the top to make more room for the graph.
     - Ways to centralise nodes based on selected artists? (if selected from the route mapping) 
 

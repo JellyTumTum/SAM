@@ -130,20 +130,25 @@ def get_artist(artist_name: str, max_results: int) -> List[Artist]:
     return artists
 
 
-def get_artist_albums(spotify_id: str, all_albums: bool = False) -> List[Album]:
-    
+async def get_artist_albums(spotify_id: str, all_albums: bool = False, ws_connection=None) -> List[Album]:
 
     url = f"{ARTIST_URL}/{spotify_id}/albums"
     headers = get_spotify_headers()
     params = {"limit": 50, "offset": 0, "include_groups": "single,appears_on,album"}
     album_ids = []
+    total_albums = None
 
     while True:
         print(f"Finding albums {params['offset']} - {params['offset'] + params['limit']}")
+        if ws_connection:
+            progress_bar = (params['offset']/total_albums) * 100 if total_albums else None
+            await send_status_update(ws_connection, 
+                                     f"Collating albums {params['offset']} - {params['offset'] + params['limit']}", progress_bar=progress_bar)
         response = make_spotify_call(url, headers, params)
 
         data = response.json()
         print(f"total albums = {data['total']}")
+        total_albums = data['total']
         album_ids.extend([item['id'] for item in data['items']])
 
         if not all_albums or len(data['items']) < 50:
@@ -154,10 +159,10 @@ def get_artist_albums(spotify_id: str, all_albums: bool = False) -> List[Album]:
     # Fetch detailed information for all albums
     print(f"album_ids length = {len(set(album_ids))}")
     
-    detailed_albums = get_detailed_album_info(album_ids)
+    detailed_albums = await get_detailed_album_info(album_ids, ws_connection=ws_connection)
     return detailed_albums
 
-def get_detailed_album_info(album_ids: List[str]) -> List[Album]:
+async def get_detailed_album_info(album_ids: List[str], ws_connection=None) -> List[Album]:
     
     headers = get_spotify_headers()
     all_albums = []
@@ -173,6 +178,10 @@ def get_detailed_album_info(album_ids: List[str]) -> List[Album]:
 
         
         print(f"Fetching detailed album information for albums {index*20} -> {(index+1)*20}. Total Albums: {len(album_ids)}")
+        if ws_connection:
+            progress_bar = index*20 / len(album_ids) * 100
+            await send_status_update(ws_connection, 
+                                     f"Fetching Detailed Album Information for albums {index*20} -> {(index+1)*20} / {len(album_ids)}", progress_bar=progress_bar)
         response = make_spotify_call(url, headers)
         if response.status_code != 200:
             try:
@@ -211,7 +220,7 @@ def get_artists_from_album_list(albums: List[Album], original_artist: Artist) ->
     return list(unique_artists)
 
 
-def get_connections(artist: Artist, db : Session = None) -> Artist:
+async def get_connections(artist: Artist, db : Session = None, ws_connection = None) -> Artist:
     print(f"Finding connections for {artist.name}")
     if db:
         print(f"Checking db for up-to-date artist entry")
@@ -220,9 +229,9 @@ def get_connections(artist: Artist, db : Session = None) -> Artist:
     if len(artist.connections) > 2: # and artist.lastUpdated.astimezone(pytz.utc) > datetime.now(pytz.utc) - timedelta(days=7) --> Add back in once lastUpdated is fixed
         print(f"Using Database Cached Connections")
         return artist.connections
-    albums = get_artist_albums(artist.id, all_albums=True)
+    albums = await get_artist_albums(artist.id, all_albums=True, ws_connection=ws_connection)
     artist.lastUpdated = datetime.now(pytz.utc)
-    artist_list = get_artists_from_album_list(albums, artist)
+    artist_list = await get_artists_from_album_list(albums, artist, ws_connection=ws_connection)
     if artist_list is not None:
         return get_multiple_artists(artist_list)
     else:
@@ -234,7 +243,7 @@ def contains_artist(artist_list : List[Artist], artist : Artist):
             return True
     return False
 
-def get_multiple_artists(artist_list: List[Artist]) -> List[Artist]:
+async def get_multiple_artists(artist_list: List[Artist], ws_connection = None) -> List[Artist]:
     
     artist_ids = [artist.id for artist in artist_list]
     headers = get_spotify_headers()
@@ -247,6 +256,9 @@ def get_multiple_artists(artist_list: List[Artist]) -> List[Artist]:
         ids_chunk = artist_ids[i:i+50]
         end_artist_name = artist_list[i+50].name if i + 50 < len(artist_list) else artist_list[-1].name
         print(f"Fetching Detailed Artist Information for artists {i} ({(artist_list[i].name)}) -> {i+50} ({end_artist_name})")
+        if ws_connection:
+            progress_bar = i / len(artist_ids)*100
+            await send_status_update(ws_connection, f"Fetching Detailed Artist Information for artists {i} -> {i+50}", progress_bar=progress_bar)
         ids_param = ','.join(ids_chunk)
         url = f"{SPOTIFY_API_BASE_URL}/artists?ids={ids_param}"
         response = make_spotify_call(url, headers=headers)
@@ -412,6 +424,11 @@ async def set_selected_artist(ws_connection, selected_artist: Artist, graph_mana
                                               "selected_artist": selected_artist.id,
                                               "full_graph": False}))
 
+async def send_status_update(ws_connection, display_message: str, secondary_message: str = None, progress_bar: int = None): 
+    await ws_connection.send_text(json.dumps({"update_type": "status",
+                                              "message": display_message,
+                                              "progress": progress_bar}))
+
 class RouteReply(BaseModel):
     route_list: List[Artist]
     graph: Optional[GraphStructure] = None
@@ -442,7 +459,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
 
     # 1. Get all related artists for the first artist. 
     
-    starting_artist.connections = get_connections(starting_artist, db)
+    starting_artist.connections = await get_connections(starting_artist, db, ws_connection=ws_connection)
     print(f"Artists connecting to {starting_artist.name} \n")
     await send_route_update(ws_connection, graph_manager, f"Connections for {starting_artist.name} added. ", starting_artist, 0, send_full_graph=send_full_graph)
     for artist in starting_artist.connections: 
@@ -451,7 +468,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
             found = True
             
     await set_selected_artist(ws_connection, ending_artist, graph_manager=graph_manager)
-    ending_artist.connections = get_connections(ending_artist, db)
+    ending_artist.connections = await get_connections(ending_artist, db, ws_connection=ws_connection)
     save_artist(db, ending_artist)
     print(f"Artists connecting to {ending_artist.name} \n")
     for artist in ending_artist.connections:
@@ -481,7 +498,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
         # to check if target_artist or connecting artist is used
         required_connecting_artist = len(potential_end) > 2
         if required_connecting_artist:
-            potential_end[1].connections = get_connections(potential_end[1])
+            potential_end[1].connections = await get_connections(potential_end[1], db, ws_connection=ws_connection)
             # Fixes inconsistencies in spotifys data where A has a connection to B but B doesnt have one back even though they should.
             if not any(conn.id == ending_artist.id for conn in potential_end[1].connections): 
                     potential_end[1].connections.append(ending_artist)  
@@ -504,7 +521,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
             print(f"chosen_artist = {chosen_artist[0].name}. Depth: {chosen_artist[1]}. Weight: {chosen_artist[2]}. Previous_connections = [{', '.join([artist.name for artist in chosen_artist[3]])}]")
             if (not send_full_graph):
                 await set_selected_artist(ws_connection, chosen_artist[0], graph_manager=graph_manager)
-            chosen_artist[0].connections = get_connections(chosen_artist[0], db) # chosen_artist needs to be saved to database seen as it has its connections.
+            chosen_artist[0].connections = await get_connections(chosen_artist[0], db, ws_connection=ws_connection) # chosen_artist needs to be saved to database seen as it has its connections.
             chosen_artist[0].lastUpdated = datetime.now(pytz.utc)
             if chosen_artist[0].connections is not None:
                 artist_with_connections_found = True
@@ -521,7 +538,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
             # to check if target_artist or connecting artist is used
             required_connecting_artist = len(potential_end) > 2
             if required_connecting_artist:
-                potential_end[1].connections = get_connections(potential_end[1])
+                potential_end[1].connections = await get_connections(potential_end[1], db, ws_connection=ws_connection)
                 # Fixes inconsistencies in spotifys data where A has a connection to B but B doesnt have one back even though they should.
                 if not any(connection.id == ending_artist.id for connection in potential_end[1].connections): 
                     potential_end[1].connections.append(ending_artist)  
@@ -556,7 +573,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
             # means artist has been skipped (had direct connection to target_artist)
             need_info = True       
     if need_info:
-        artist_route = get_multiple_artists(artist_route)
+        artist_route = await get_multiple_artists(artist_route)
         print(f"{artist_route}")
 
     save_multiple_artists(db, artist_route) 
