@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ArtistSelectionCard from './ArtistSelectionCard';
-import { Button, Typography } from '@material-tailwind/react';
+import { Button, Switch, Typography } from '@material-tailwind/react';
 import axios from 'axios';
 import DynamicGraph from './DynamicGraph';
 import ShowcaseArtist from './ShowcaseArtist';
 import StatusDisplay from './StatusDisplay';
 
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const RouteFinding = () => {
     const [startingArtist, setStartingArtist] = useState(null);
@@ -20,10 +21,18 @@ const RouteFinding = () => {
     const [secondaryMessage, setSecondaryMessage] = useState(null)
     const [progressBarPercent, setProgressBarPercent] = useState(null);
     const routeFound = useRef(true);
-    // const [selectionMessage, setSelectionMessage] = useState(null);
+    const [routeTimer, setRouteTimer] = useState(null);
 
     // UI Information
     const [hideSelectors, setHideSelectors] = useState(false);
+    const [hideGraph, setHideGraph] = useState(false);
+    const [doGraphCalculations, setDoGraphCalculations] = useState(true);
+    const [hasWsConnection, setHasWsConnection] = useState(false);
+    const [findRouteString, setFindRouteString] = useState("Find Route");
+
+    // Timer state
+    const [timer, setTimer] = useState(0); // in milliseconds
+    const timerRef = useRef(null); // Reference to the timer interval
 
     // Showcase variables
     const [showcaseArtist, setShowcaseArtist] = useState(null);
@@ -33,9 +42,6 @@ const RouteFinding = () => {
     const [ws, setWs] = useState(null);
     const [wsId, setWsId] = useState(null);
     const [pingInterval, setPingInterval] = useState(null);
-
-    // UI Details 
-    const [findRouteString, setFindRouteString] = useState("Find Route");
 
 
     // const sampleData = {
@@ -52,6 +58,35 @@ const RouteFinding = () => {
     //         { "source": "4", "target": "1" }
     //     ]
     // }
+
+    // Timer formatting function
+    const switchGraphCalculations = () => {
+        if (doGraphCalculations) {
+            setHideGraph(true)
+            setDoGraphCalculations(false)
+        } else {
+            setHideGraph(false)
+            setDoGraphCalculations(true)
+        }
+    }
+
+    const formatTime = (milliseconds) => {
+        const seconds = Math.floor(milliseconds / 1000);
+        const ms = (milliseconds % 1000) / 10; // To get two decimal points
+        return `${seconds}.${ms.toFixed(0).padStart(2, '0')}s`;
+    };
+
+    const startTimer = () => {
+        const startTime = Date.now(); // Capture the start time
+
+        timerRef.current = setInterval(() => {
+            setTimer(Date.now() - startTime);
+        }, 10);
+    };
+
+    const stopTimer = () => {
+        clearInterval(timerRef.current); // Clear the interval to stop the timer
+    };
 
 
     useEffect(() => {
@@ -96,6 +131,7 @@ const RouteFinding = () => {
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
+            setHasWsConnection(true);
             const interval = setInterval(() => {
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify({ type: 'ping' }));
@@ -106,10 +142,12 @@ const RouteFinding = () => {
 
         socket.onerror = (error) => {
             console.error('WebSocket error observed:', error);
+            setHasWsConnection(false);
         };
 
         socket.onclose = (event) => {
             console.log(`WebSocket closed: Code = ${event.code}, Reason = ${event.reason}`);
+            setHasWsConnection(false);
         };
 
         socket.onmessage = (event) => {
@@ -250,20 +288,25 @@ const RouteFinding = () => {
             if (startingArtist && endArtist) {
                 try {
                     routeFound.current = false;
+                    setTimer(0)
                     setHideSelectors(true);
-                    console.log("Setting HideSelectors to true");
+                    setProgressBarPercent(null);
                     setFindRouteString("Finding Route...")
+                    startTimer();
                     const response = await axios.post('http://localhost:8000/routes/find', {
                         starting_artist: startingArtist,
                         ending_artist: endArtist,
                         websocket_id: wsId
                     });
+                    stopTimer()
                     routeFound.current = true
                     setFindRouteString("Find Route");
                     console.log('Route:', response.data.route_list);
                     console.log("Final Graph: ")
                     console.log(response.data.graph)
                     setDisplayMessage('Route: ' + response.data.route_list.map(artist => artist.name).join(' -> '));
+                    setSecondaryMessage("");
+                    setProgressBarPercent(null);
                     setPrevGraphData(graphData)
                     setGraphData(response.data.graph)
                 } catch (error) {
@@ -294,29 +337,82 @@ const RouteFinding = () => {
     };
 
     return (
-        <div className="flex flex-col items-center h-full dark:bg-darkBackground bg-background relative">
-            {/* Status Indicator */}
-            <div className="absolute top-4 right-4">
-                {routeFound.current ? (
-                    <CheckCircleIcon className="h-8 w-8 text-green-500" />
-                ) : (
-                    <XCircleIcon className="h-8 w-8 text-red-500" />
-                )}
+        <div className="flex flex-col items-center h-full dark:bg-darkBackground bg-background relative ">
+            {/* Top Bar */}
+            <div className="w-full flex justify-between items-center p-2 bg-background2 dark:bg-darkBackground2 border-b-2 border-accent dark:border-darkAccent">
+                {/* Combined Route Status and Timer Display */}
+                <div className="flex items-center space-x-4">
+                    {/* Route Status */}
+                    <div className="flex items-center space-x-2">
+                        <Typography className="text-txt dark:text-darkTxt">Finding Path:</Typography>
+                        {!routeFound.current ? (
+                            <CheckCircleIcon className="h-6 w-6 text-positive" />
+                        ) : (
+                            <XCircleIcon className="h-6 w-6 text-negative" />
+                        )}
+                    </div>
+
+                    {/* Timer Display */}
+                    <div className="flex items-center space-x-2">
+                        <Typography className="text-txt dark:text-darkTxt">Time Elapsed:</Typography>
+                        <Typography className="text-txt dark:text-darkTxt">{formatTime(timer)}</Typography>
+                    </div>
+                </div>
+
+
+                {/* WebSocket Status */}
+                <div className="flex items-center space-x-2">
+                    <Typography className="text-txt dark:text-darkTxt">Connection Status:</Typography>
+                    {routeFound.current ? (
+                        <CheckCircleIcon className="h-6 w-6 text-positive" />
+                    ) : (
+                        <XCircleIcon className="h-6 w-6 text-negative" />
+                    )}
+                </div>
+                {/* Hide Graph Section */}
+                <div className="flex items-center space-x-4">
+                    {/* Switch to toggle no graph logic at all */}
+                    {/* https://www.material-tailwind.com/docs/html/switch */}
+                    <div class="inline-flex items-center">
+                        <div class="inline-flex items-center">
+                            <div class="relative inline-block w-8 h-4 rounded-full cursor-pointer">
+                                <input id="generationSwitch" type="checkbox"
+                                    class="absolute w-8 h-4 transition-colors duration-300 rounded-full appearance-none cursor-pointer peer bg-background dark:bg-darkBackground"
+                                    defaultValue={doGraphCalculations}
+                                    defaultChecked
+                                    onChange={switchGraphCalculations} />
+                                <label htmlFor="generationSwitch"
+                                    class="before:content[''] absolute top-2/4 -left-1 h-5 w-5 -translate-y-2/4 cursor-pointer rounded-full border border-background dark:border-darkBackground bg-negative shadow-md transition-all duration-300 before:absolute before:top-2/4 before:left-2/4 before:block before:h-10 before:w-10 before:-translate-y-2/4 before:-translate-x-2/4 before:rounded-full before:bg-negative before:opacity-0 before:transition-opacity hover:before:opacity-10 peer-checked:translate-x-full peer-checked:bg-positive peer-checked:before:bg-positive">
+                                    {/* peer-checked : when its enabled -> peer is due to it linking to the actual checkbox input above */}
+                                    <div class="inline-block p-5 rounded-full top-2/4 left-2/4 -translate-x-2/4 -translate-y-2/4"
+                                        data-ripple-dark="true"></div>
+                                </label>
+                            </div>
+                        </div>
+                        <Typography className="text-txt dark:text-darkTxt ml-4">Graph Generation</Typography>
+                    </div>
+
+                    {/* Hide Graph Button */}
+                    <div className="flex items-center cursor-pointer" onClick={() => setHideGraph(prev => !prev)}>
+
+                        {hideGraph ? (
+                            <>
+                            {/* Hiding Graph has extra ml-4 to pad and avoid moving stuff.  */}
+                                <Typography className="text-txt dark:text-darkTxt mr-2 ml-4"> Hiding Graph</Typography> 
+                                <EyeSlashIcon className="h-6 w-6 text-txt dark:text-darkTxt transition-transform duration-300 transform hover:rotate-180" />
+                            </>
+                        ) : (
+                            <>
+                                <Typography className="text-txt dark:text-darkTxt mr-2">Showing Graph</Typography>
+                                <EyeIcon className="h-6 w-6 text-txt dark:text-darkTxt transition-transform duration-300 transform hover:rotate-180" />
+                            </>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            <p className="text-txt dark:text-darkTxt m-5">websocket id = {wsId}</p>
-
-            {/* old findRoute button */}
-            {/* <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
-                <Button onClick={handleFindRoute} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">{findRouteString}</Button>
-            </div> */}
-            {/* <div className="flex mt-4 w-full max-w-md md:max-w-2xl">
-                <Button onClick={printGraphData} className="w-full bg-primary dark:bg-darkBackground2 text-darkTxt">Print Graph Data</Button>
-            </div> */}
-
             {/* Main Graph Container */}
-
-            <div className="relative w-11/12 mt-10 mb-10 h-full border-2 border-accent dark:border-darkAccent rounded-md">
+            <div className="relative w-11/12 mx-4 mt-4 mb-4 h-full border-2 border-accent dark:border-darkAccent rounded-md">
                 {/* Artist Selection Cards */}
                 <div className="absolute top-4 left-4">
                     <ArtistSelectionCard
@@ -367,31 +463,34 @@ const RouteFinding = () => {
                 )}
 
                 {/* Status Display */}
-                {hideSelectors && graphData.nodes.length > 0 && (
+                {displayMessage && graphData.nodes.length > 0 && (
                     <div className="absolute bottom-4 left-4 right-4">
                         {/* Takes full width at the bottom with margins adjusted */}
                         <StatusDisplay
                             primaryMessage={displayMessage}
                             secondaryMessage={secondaryMessage}
-                            progress_bar_percent={null}
+                            progress_bar_percent={progressBarPercent}
                             complete_route={routeFound.current}
                         />
                     </div>
                 )}
 
                 {/* Dynamic Graph */}
-                {graphData.nodes.length > 0 && (
+                {graphData.nodes.length > 0 && doGraphCalculations && (
                     <DynamicGraph
                         graphData={graphData}
                         prevGraphData={prevGraphData}
                         completeGraph={routeFound.current}
                         onNodeSelect={handleNodeSelect}
                         onEdgeSelect={handleEdgeSelect}
+                        hideGraph={hideGraph}
+                        doGraphCalculations={doGraphCalculations}
                     />
                 )}
             </div>
-        </div>
+        </div >
     );
+
 
 };
 
@@ -404,9 +503,10 @@ BUGS:
     - Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
     - When found in one link there is no complete lines. 
     - Longer Searches seem to fail, both http timeout (30s) is reached and the websocket collapses somehow
+        - Catch http errors and update the user / close the page idk something that fixees the mess that follows a failed search
 
 TODO: 
-    - Move the stuff form the top to make more room for the graph.
+    - Convert DarkMode switch to same type as for graph logic
     - Ways to centralise nodes based on selected artists? (if selected from the route mapping) 
 
 Add adjusters for the physics factors 

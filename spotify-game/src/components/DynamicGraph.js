@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import themeColours from '../themeColours';
 
@@ -10,9 +10,10 @@ ADDITIONS / ADJUSTMENTS:
 
 */
 
-const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, completeGraph = false, onNodeSelect, onEdgeSelect }) => {
+const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, completeGraph = false, onNodeSelect, onEdgeSelect, hideGraph=false, doGraphCalculations=true }) => {
     const svgRef = useRef();
     const isDark = localStorage.getItem('darkMode') === 'true';
+    const [runGraphCalculations, setRunGraphCalculations] = useState(doGraphCalculations)
     const colors = {
         background: isDark ? themeColours.darkBackground : themeColours.background,
         background2: isDark ? themeColours.darkBackground2 : themeColours.background2,
@@ -31,9 +32,15 @@ const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, comple
     };
     const scaledMin = 50 * scaleFactor;
     const scaledMax = 100 * scaleFactor;
+    console.log("Doing graph calculations = " + doGraphCalculations)
+
+    useEffect((doGraphCalculations) => {
+        setRunGraphCalculations(doGraphCalculations)
+    })
+
 
     useEffect(() => {
-        if (!graphData) return;
+        if (!graphData || !doGraphCalculations) return;
 
         const width = svgRef.current.clientWidth;
         const height = svgRef.current.clientHeight;
@@ -146,7 +153,7 @@ const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, comple
 
 
         const simulation = d3.forceSimulation(graphData.nodes)
-            .alpha(0.5)
+            .alpha(0.1)
             .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(150))
             .force('charge', d3.forceManyBody().strength(-500))
             .force('center', d3.forceCenter(width / 2, height / 2))
@@ -173,8 +180,8 @@ const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, comple
             })
             .attr('stroke-opacity', 1)
             .attr('stroke-width', link => {
-                if (link.inRoute) { return scaledMin / 10 }
-                else { return scaledMin / 25 }
+                if (link.inRoute) { return scaledMin / 4 }
+                else { return scaledMin / 8 }
             })
             .on('click', (event, link) => {
                 const source = graphData.nodes.find(node => node.id === link.source.id);
@@ -276,7 +283,12 @@ const DynamicGraph = ({ graphData, scaleFactor = 1, prevGraphData = null, comple
     }, [graphData]);
 
     return (
-        <svg ref={svgRef} className="w-full h-full bg-background dark:bg-darkBackground border border-accent dark:border-darkAccent rounded-md"></svg>
+        <svg 
+            ref={svgRef} 
+            className={`w-full h-full bg-background dark:bg-darkBackground border border-accent dark:border-darkAccent rounded-md 
+                ${hideGraph ? 'opacity-0' : 'opacity-100'}
+            `}
+        ></svg>
     );
 };
 

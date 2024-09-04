@@ -52,6 +52,7 @@ class Artist(BaseModel):
     genres: Optional[List[str]] = []
     
     def __str__(self):
+        print(self.connections)
         connections_str = ', '.join([artist.name for artist in self.connections]) if self.connections else 'None'
         return (
             f"Artist(\n"

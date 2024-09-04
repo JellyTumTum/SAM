@@ -181,7 +181,7 @@ async def get_detailed_album_info(album_ids: List[str], ws_connection=None) -> L
         if ws_connection:
             progress_bar = index*20 / len(album_ids) * 100
             await send_status_update(ws_connection, 
-                                     f"Fetching Detailed Album Information for albums {index*20} -> {(index+1)*20} / {len(album_ids)}", progress_bar=progress_bar)
+                                     f"Fetching Detailed Album Information for albums {index*20} -> {(index+1)*20 if (index+1)*20 < len(album_ids) else len(album_ids)} / {len(album_ids)}", progress_bar=progress_bar)
         response = make_spotify_call(url, headers)
         if response.status_code != 200:
             try:
@@ -228,12 +228,14 @@ async def get_connections(artist: Artist, db : Session = None, ws_connection = N
     print(f"get_connections | connections length for {artist.name} : {len(artist.connections)}")
     if len(artist.connections) > 2: # and artist.lastUpdated.astimezone(pytz.utc) > datetime.now(pytz.utc) - timedelta(days=7) --> Add back in once lastUpdated is fixed
         print(f"Using Database Cached Connections")
+        if ws_connection:
+            send_status_update(ws_connection, f"Importing Cached Collaborations for {artist.name}")
         return artist.connections
     albums = await get_artist_albums(artist.id, all_albums=True, ws_connection=ws_connection)
     artist.lastUpdated = datetime.now(pytz.utc)
-    artist_list = await get_artists_from_album_list(albums, artist, ws_connection=ws_connection)
+    artist_list = get_artists_from_album_list(albums, artist)
     if artist_list is not None:
-        return get_multiple_artists(artist_list)
+        return await get_multiple_artists(artist_list, ws_connection=ws_connection)
     else:
         return None
 

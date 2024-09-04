@@ -12,7 +12,7 @@ const StatusDisplay = ({ primaryMessage, secondaryMessage, progress_bar_percent,
     return (
         <Card
             ref={cardRef}
-            className={`transition-all duration-300 ease-in-out overflow-visible ${complete_route ? 'h-12' : 'h-20'} w-full bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg pt-2 pl-2 pr-2 border-accent dark:border-darkAccent relative`}
+            className={`transition-all duration-300 ease-in-out overflow-visible ${complete_route ? 'h-12' : 'h-20'} w-full bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg ${complete_route ? 'pt-3' : 'pt-2'} pl-2 pr-2 border-accent dark:border-darkAccent relative`}
         >
 
             {/* Messages */}

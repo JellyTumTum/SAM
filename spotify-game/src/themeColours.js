@@ -11,6 +11,9 @@ const themeColours = {
     darkSecondary: '#e2e8f0',
     darkAccent: '#919191',
     darkTxt: '#cccccc',
+    positive: '#00ff00',
+    negative: '#ff0000',
+    
   };
   
   module.exports = themeColours;

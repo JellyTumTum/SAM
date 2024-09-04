@@ -89,9 +89,9 @@ def save_multiple_artists(db: Session, artists: List[DtoArtist]):
     for artist in artists:
         save_artist(db, artist)
         
-def update_artist_with_db(db: Session, artist: DtoArtist) -> DtoArtist:
+def update_artist_with_db(db: Session, artist: DtoArtist, require_all_connections: bool = False) -> DtoArtist:
     print(f"Running update_artist_with_db for {artist.name}")
-    dto_artist_from_db: DtoArtist = get_artist_by_id(db, artist.id)
+    dto_artist_from_db: DtoArtist = get_artist_by_id(db, artist.id, require_all_connections)
     print(f"Outside of get_artist_by_id for {artist.name}")
     if dto_artist_from_db is not None:
         print(f"Skibidi update_artist_with_db | connections length for {dto_artist_from_db.name} : {len(dto_artist_from_db.connections)}")
@@ -196,9 +196,12 @@ def combine_dto_artists(dto_artist_1: DtoArtist, dto_artist_2: DtoArtist, connec
     return combined_artist
 
 
-def get_artist_by_id(db: Session, artist_id: str) -> DtoArtist:
+def get_artist_by_id(db: Session, artist_id: str, require_all_connections=False) -> DtoArtist:
     # Use joinedload to eagerly load genres and connections to keep them attached to the session.
     db_artist = db.query(DbArtist).filter(DbArtist.id == artist_id).options(joinedload(DbArtist.genres), joinedload(DbArtist.connections)).first()
+    if require_all_connections and db_artist.connections < 1:
+        # to detect if the connections are extensive (main_artists connections have been explored and are not just the 3rd party ones (related_connections)) 
+        return None
     if db_artist:
         genres = [genre.name for genre in db_artist.genres]
         print(f"database connections for {db_artist.name} : {len(db_artist.connections)} + {len(db_artist.related_connections)}. Length of Genres : {len(genres)}")
@@ -247,7 +250,7 @@ def convert_raw_connections_to_artists(db_artist: DbArtist, raw_connections: lis
         elif connection.related_artist_id == db_artist.id:
             related_artist : DbArtist = connection.artist
             print(f"Connection Found: {related_artist.name} -> {db_artist.name}")
-            print(f"adding {related_artist} to excluded_ids")
+            # print(f"adding {related_artist} to excluded_ids")
             excluded_artist = related_artist
         if related_artist != None:
             requires_connections = False
