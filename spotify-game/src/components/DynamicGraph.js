@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import themeColours from '../themeColours';
+import { ChevronDoubleRightIcon } from '@heroicons/react/24/outline';
 
 /*
 ADDITIONS / ADJUSTMENTS:
@@ -10,10 +11,11 @@ ADDITIONS / ADJUSTMENTS:
 
 */
 
-const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, completeGraph = false, onNodeSelect, onEdgeSelect, hideGraph=false, doGraphCalculations=true }) => {
+const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, completeGraph = false, onNodeSelect, onEdgeSelect, hideGraph = false, doGraphCalculations = true, colorLinks}) => {
     const svgRef = useRef();
     const isDark = localStorage.getItem('darkMode') === 'true';
     const [runGraphCalculations, setRunGraphCalculations] = useState(doGraphCalculations)
+    const completeIndex = []
     const colors = {
         background: isDark ? themeColours.darkBackground : themeColours.background,
         background2: isDark ? themeColours.darkBackground2 : themeColours.background2,
@@ -21,18 +23,24 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, comp
         secondary: isDark ? themeColours.darkSecondary : themeColours.secondary,
         accent: isDark ? themeColours.darkAccent : themeColours.accent,
         txt: isDark ? themeColours.darkTxt : themeColours.txt,
-        complete: "#953553",
-        selected: "#A020F0",
+        complete: "#00ff00",
+        selected: isDark ? "ffffff" : "000000",
         depths: Array.from({ length: 6 }, (_, i) => {
             const depthScale = d3.scaleLinear()
                 .domain([1, 5])
                 .range(["#5ce65c", "#e60000"]); // Bright green to red
             return depthScale(i);
-        })
+        }),
+        // rainbowColors are managed in the RouteFinding and passed in already assigned to a node through colorLinks. this shouldnt be used in here.
+        rainbowColors: [
+            "#8B00FF", "#4B0082", "#0000FF", "#007FFF", "#00FFFF",
+            "#00FFBF", "#00FF7F", "#00FF00", "#7FFF00", "#BFFF00",
+            "#FFFF00", "#FFBF00", "#FF7F00", "#FF4500", "#FF0000"
+        ]
     };
     const scaledMin = 50 * scaleFactor;
     const scaledMax = 100 * scaleFactor;
-    console.log("Doing graph calculations = " + doGraphCalculations)
+    // console.log(colorLinks)
 
     useEffect((doGraphCalculations) => {
         setRunGraphCalculations(doGraphCalculations)
@@ -86,70 +94,151 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, comp
         // Normalize function
         const normalize = (value, min, max) => (value - min) / (max - min);
 
-        // Custom clustering force
-        const clusterForce = (completeGraph) => {
-            if (completeGraph) {
-                console.log("Enacting cluster forces")
-                // Find the min and max connection count
-                const connectionCounts = graphData.nodes.map(node => node.connections);
-                const minConnections = Math.min(...connectionCounts);
-                const maxConnections = Math.max(...connectionCounts);
+        // // Custom clustering force
+        // const clusterForce = (completeGraph) => {
+        //     if (completeGraph) {
+        //         console.log("Enacting cluster forces")
+        //         // Find the min and max connection count
+        //         const connectionCounts = graphData.nodes.map(node => node.connections);
+        //         const minConnections = Math.min(...connectionCounts);
+        //         const maxConnections = Math.max(...connectionCounts);
 
-                // Get only complete nodes
-                const completeNodes = graphData.nodes.filter(node => node.is_complete);
+        //         // Get only complete nodes
+        //         const completeNodes = graphData.nodes.filter(node => node.is_complete);
 
-                graphData.nodes.forEach(node => {
-                    const normalizedConnections = normalize(node.connections, minConnections, maxConnections);
+        //         graphData.nodes.forEach(node => {
+        //             const normalizedConnections = normalize(node.connections, minConnections, maxConnections);
 
-                    const neighbors = graphData.links
-                        .filter(link => link.source.id === node.id || link.target.id === node.id)
-                        .map(link => link.source.id === node.id ? link.target : link.source);
+        //             const neighbors = graphData.links
+        //                 .filter(link => link.source.id === node.id || link.target.id === node.id)
+        //                 .map(link => link.source.id === node.id ? link.target : link.source);
 
-                    neighbors.forEach(neighbor => {
-                        const distance = Math.sqrt((node.x - neighbor.x) ** 2 + (node.y - neighbor.y) ** 2);
-                        let strength = 2 / (1 + distance); // Base repulsion decreases with distance
+        //             neighbors.forEach(neighbor => {
+        //                 const distance = Math.sqrt((node.x - neighbor.x) ** 2 + (node.y - neighbor.y) ** 2);
+        //                 let strength = 2 / (1 + distance); // Base repulsion decreases with distance
 
-                        // Increase the repulsion strength for non-connected nodes
-                        if (!neighbors.includes(neighbor)) {
-                            strength *= 5 * (1 + normalizedConnections); // Stronger repulsion for more connected nodes
-                        }
+        //                 // Increase the repulsion strength for non-connected nodes
+        //                 if (!neighbors.includes(neighbor)) {
+        //                     strength *= 5 * (1 + normalizedConnections); // Stronger repulsion for more connected nodes
+        //                 }
 
+        //                 if (distance > 0) {
+        //                     const dx = (node.x - neighbor.x) / distance;
+        //                     const dy = (node.y - neighbor.y) / distance;
+
+        //                     node.vx += dx * strength;
+        //                     node.vy += dy * strength;
+        //                 }
+        //             });
+        //         });
+
+        //         // Additional repulsion force for complete nodes
+        //         for (let i = 0; i < completeNodes.length; i++) {
+        //             for (let j = i + 1; j < completeNodes.length; j++) {
+        //                 const nodeA = completeNodes[i];
+        //                 const nodeB = completeNodes[j];
+
+        //                 const distance = Math.sqrt((nodeA.x - nodeB.x) ** 2 + (nodeA.y - nodeB.y) ** 2);
+        //                 if (distance > 0) {
+        //                     const dx = (nodeA.x - nodeB.x) / distance;
+        //                     const dy = (nodeA.y - nodeB.y) / distance;
+
+        //                     const repulsionStrength = 10 / (1 + distance); // Adjust repulsion strength as needed
+
+        //                     // Apply repulsion force to separate complete nodes
+        //                     nodeA.vx += dx * repulsionStrength;
+        //                     nodeA.vy += dy * repulsionStrength;
+        //                     nodeB.vx -= dx * repulsionStrength;
+        //                     nodeB.vy -= dy * repulsionStrength;
+        //                 }
+        //             }
+        //         }
+        //     } else {
+        //         console.log("Not enacting cluster forces")
+        //     }
+
+        // };
+
+        const separateHighConnections = () => {
+            graphData.nodes.forEach(nodeA => {
+                graphData.nodes.forEach(nodeB => {
+                    if (nodeA !== nodeB && nodeA.connections > 1 && nodeB.connections > 1) {
+                        const dx = nodeA.x - nodeB.x;
+                        const dy = nodeA.y - nodeB.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy) * 0.5;
                         if (distance > 0) {
-                            const dx = (node.x - neighbor.x) / distance;
-                            const dy = (node.y - neighbor.y) / distance;
-
-                            node.vx += dx * strength;
-                            node.vy += dy * strength;
-                        }
-                    });
-                });
-
-                // Additional repulsion force for complete nodes
-                for (let i = 0; i < completeNodes.length; i++) {
-                    for (let j = i + 1; j < completeNodes.length; j++) {
-                        const nodeA = completeNodes[i];
-                        const nodeB = completeNodes[j];
-
-                        const distance = Math.sqrt((nodeA.x - nodeB.x) ** 2 + (nodeA.y - nodeB.y) ** 2);
-                        if (distance > 0) {
-                            const dx = (nodeA.x - nodeB.x) / distance;
-                            const dy = (nodeA.y - nodeB.y) / distance;
-
-                            const repulsionStrength = 10 / (1 + distance); // Adjust repulsion strength as needed
-
-                            // Apply repulsion force to separate complete nodes
-                            nodeA.vx += dx * repulsionStrength;
-                            nodeA.vy += dy * repulsionStrength;
-                            nodeB.vx -= dx * repulsionStrength;
-                            nodeB.vy -= dy * repulsionStrength;
+                            // Logarithmic scaling for more natural repulsion
+                            const strength = Math.log(1 + 1 / distance) * scaleFactor * 500;
+                            nodeA.vx += (dx / distance) * strength;
+                            nodeA.vy += (dy / distance) * strength;
+                            nodeB.vx -= (dx / distance) * strength;
+                            nodeB.vy -= (dy / distance) * strength;
                         }
                     }
-                }
-            } else {
-                console.log("Not enacting cluster forces")
-            }
-
+                });
+            });
         };
+
+        // Define a custom force for increasing attraction between connected nodes
+        const attractRelatedNodes = (alpha) => {
+            // Iterate over all links to apply the attraction force
+            graphData.links.forEach(link => {
+                const source = graphData.nodes.find(node => node.id === link.source.id);
+                const target = graphData.nodes.find(node => node.id === link.target.id);
+
+                if (source && target) {
+                    const dx = target.x - source.x;
+                    const dy = target.y - source.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 0) {
+                        // Adjust this strength value for desired attraction force
+                        const strength = 0.1 * alpha;  // Adjust the multiplier as needed
+
+                        // Attraction force to pull nodes closer together
+                        const attractionForce = strength * distance; // Attraction proportional to distance
+
+                        // Update velocities for both nodes to move them closer
+                        source.vx += (dx / distance) * attractionForce;
+                        source.vy += (dy / distance) * attractionForce;
+                        target.vx -= (dx / distance) * attractionForce;
+                        target.vy -= (dy / distance) * attractionForce;
+                    }
+                }
+            });
+        };
+
+        const repelCompletedNodes = (alpha) => {
+            const completeNodes = graphData.nodes.filter(node => node.is_complete);
+        
+            // Apply repulsion between all pairs of complete nodes
+            for (let i = 0; i < completeNodes.length; i++) {
+                for (let j = i + 1; j < completeNodes.length; j++) {
+                    const nodeA = completeNodes[i];
+                    const nodeB = completeNodes[j];
+        
+                    const dx = nodeB.x - nodeA.x;
+                    const dy = nodeB.y - nodeA.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+        
+                    if (distance > 0) {
+                        // Adjust this strength value for desired repulsion force
+                        const strength = alpha * (-1000 / distance); // Repulsion inversely proportional to distance
+        
+                        // Repulsion force to push nodes apart
+                        const repulsionForce = strength / distance;
+        
+                        // Update velocities for both nodes to move them apart
+                        nodeA.vx -= (dx / distance) * repulsionForce;
+                        nodeA.vy -= (dy / distance) * repulsionForce;
+                        nodeB.vx += (dx / distance) * repulsionForce;
+                        nodeB.vy += (dy / distance) * repulsionForce;
+                    }
+                }
+            }
+        };
+
+
 
 
         const simulation = d3.forceSimulation(graphData.nodes)
@@ -158,7 +247,9 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, comp
             .force('charge', d3.forceManyBody().strength(-500))
             .force('center', d3.forceCenter(width / 2, height / 2))
             .force('collision', d3.forceCollide().radius(150))
-            .force('cluster', clusterForce(completeGraph))
+            .force('repulsion', repelCompletedNodes)
+            .force('attraction', attractRelatedNodes)
+            .on('tick', separateHighConnections)
             .alphaTarget(0);
 
         const link = g.append('g')
@@ -170,13 +261,15 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, comp
                 const target = graphData.nodes.find(node => node.id === link.target.id);
                 if (link.inRoute) {
                     // console.log(`edge (${source.name} -> ${target.name}) marked as inRoute`)
-                    return colors.selected
+                    return colors.txt
                 }
-                if (source.depth < 0 && target.depth < 0) {
-                    return colors.txt;
+                if (colorLinks[source.id]) {
+                    return colorLinks[source.id]
+                } else {
+                    return colors.txt
                 }
-                const lowestDepth = Math.min(source.depth, target.depth);
-                return colors.depths[lowestDepth];
+                // const lowestDepth = Math.min(source.depth, target.depth);
+                // return colors.depths[lowestDepth];
             })
             .attr('stroke-opacity', 1)
             .attr('stroke-width', link => {
@@ -213,12 +306,10 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, comp
             })
             .attr('fill', 'none')
             .attr('stroke', artist => {
-                if (artist.is_selected) {
-                    return colors.selected;
-                } else if (artist.is_complete) {
-                    return colors.complete;
+                if (artist.depth < 0) {
+                    return colors.txt;
                 } else {
-                    return colors.accent;
+                    return colors.depths[artist.depth]
                 }
             })
             .attr('stroke-width', artist => {
@@ -283,8 +374,8 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.2, prevGraphData = null, comp
     }, [graphData]);
 
     return (
-        <svg 
-            ref={svgRef} 
+        <svg
+            ref={svgRef}
             className={`w-full h-full bg-background dark:bg-darkBackground border border-accent dark:border-darkAccent rounded-md 
                 ${hideGraph ? 'opacity-0' : 'opacity-100'}
             `}

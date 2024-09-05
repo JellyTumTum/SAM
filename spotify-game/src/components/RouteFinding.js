@@ -8,6 +8,7 @@ import StatusDisplay from './StatusDisplay';
 
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { color } from 'd3';
 
 const RouteFinding = () => {
     const [startingArtist, setStartingArtist] = useState(null);
@@ -29,6 +30,13 @@ const RouteFinding = () => {
     const [doGraphCalculations, setDoGraphCalculations] = useState(true);
     const [hasWsConnection, setHasWsConnection] = useState(false);
     const [findRouteString, setFindRouteString] = useState("Find Route");
+    const rainbowColors = [
+        "#8B00FF", "#4B0082", "#0000FF", "#007FFF", "#00FFFF",
+        "#00FFBF", "#00FF7F", "#00FF00", "#7FFF00", "#BFFF00",
+        "#FFFF00", "#FFBF00", "#FF7F00", "#FF4500", "#FF0000"
+    ];
+    const [colorLinks, setColorLinks] = useState({});
+    const usedColors = new Set();
 
     // Timer state
     const [timer, setTimer] = useState(0); // in milliseconds
@@ -88,6 +96,68 @@ const RouteFinding = () => {
         clearInterval(timerRef.current); // Clear the interval to stop the timer
     };
 
+    // I do not understand this one bit. but it works. 
+    function generateColor(index) {
+        // Generate a color using HSL (hue, saturation, lightness)
+        const hue = (index * 137.508) % 360; // Use golden angle to distribute colors evenly
+        const saturation = 70 + Math.random() * 20; // Slightly random saturation
+        const lightness = 50 + Math.random() * 20; // Slightly random lightness
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    function hashStringToColor(str) {
+        // Hash the string (artist ID) to generate a consistent integer
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+    
+        // Convert the hash to a hex color using HSL
+        const hue = Math.abs(hash) % 360;  // Use the hash to generate a hue (0-360)
+        const saturation = 70 + Math.random() * 20; // Randomize saturation slightly
+        const lightness = 50 + Math.random() * 20; // Randomize lightness slightly
+    
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    function assignColorsToCompleteNodes(graphData, colorLinks) {
+        // console.log("Starting color assignment for complete nodes...");
+        // console.log("Initial usedColors set:", usedColors);
+        // console.log("Initial colorLinks object:", colorLinks);
+
+        // Iterate over all nodes in the graph
+        for (const node of graphData.nodes) {
+            // console.log(`Checking node with ID: ${node.id}, is_complete: ${node.is_complete}`);
+
+            // Check if the node is complete and not already colored
+            if (node.is_complete && !(node.id in colorLinks)) {
+                // console.log(`Node ${node.id} is complete and not yet colored.`);
+
+                // Generate a unique color for the node based on the current number of used colors
+                const availableColor = hashStringToColor(node.id);
+
+                // console.log(`Assigning color ${availableColor} to node ${node.id}`);
+
+                // Assign the color to the node
+                colorLinks[node.id] = availableColor;
+
+                // Mark the color as used
+                usedColors.add(availableColor);
+                // console.log(`Color ${availableColor} marked as used.`);
+            } else if (node.is_complete && node.id in colorLinks) {
+                // console.log(`Node ${node.id} is already colored.`);
+            } else {
+                // console.log(`Node ${node.id} is not complete, skipping.`);
+            }
+        }
+
+        // console.log("Final colorLinks object:", colorLinks);
+        // console.log("Final usedColors set:", usedColors);
+        // console.log("Color assignment completed.");
+
+        return colorLinks;
+    }
+
 
     useEffect(() => {
         const id = generateWebSocketId();
@@ -105,11 +175,11 @@ const RouteFinding = () => {
     }, []);
 
     const updateNodeIsComplete = (nodes, id) => {
-        return nodes.map(node => node.id === id ? { ...node, isComplete: true, isSelected: false } : node);
+        return nodes.map(node => node.id === id ? { ...node, is_complete: true, is_selected: false } : node);
     };
 
     const updateNodeIsSelected = (nodes, id) => {
-        return nodes.map(node => node.id === id ? { ...node, isSelected: true } : node);
+        return nodes.map(node => node.id === id ? { ...node, is_selected: true } : node);
     };
 
     const mergeGraphData = (existingData, newData) => {
@@ -166,12 +236,15 @@ const RouteFinding = () => {
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
                     if (data.full_graph) {
-                        setPrevGraphData(graphData)
-                        setGraphData(data.graph)
+                        setGraphData(prevGraphData => {
+                            setPrevGraphData(prevGraphData)
+                            setColorLinks(prevColorLinks => { return assignColorsToCompleteNodes(data.graph, prevColorLinks, rainbowColors) })
+                            return data.graph
+                        })
                     }
                     else {
                         // 2. Add all new additions to the graph
-                        data.graph_additions['nodes'][0].isSelected = true
+                        data.graph_additions['nodes'][0].is_selected = true
                         setSelectedArtistID(data.graph_additions['nodes'][0].id)
                         setGraphData(oldGraphData => mergeGraphData(oldGraphData, data.graph_additions));
                     }
@@ -190,8 +263,11 @@ const RouteFinding = () => {
                     setDisplayMessage(data.message);
                     console.log("RouteFound = " + routeFound + " message = " + data.message)
                     if (data.full_graph) {
-                        setPrevGraphData(graphData)
-                        setGraphData(data.graph)
+                        setGraphData(prevGraphData => {
+                            setPrevGraphData(prevGraphData)
+                            setColorLinks(prevColorLinks => { return assignColorsToCompleteNodes(data.graph, prevColorLinks, rainbowColors) })
+                            return data.graph
+                        })
                     }
                     else {
                         // 1. Update selected artist to complete.
@@ -216,8 +292,11 @@ const RouteFinding = () => {
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
                     if (data.full_graph) {
-                        setPrevGraphData(graphData)
-                        setGraphData(data.graph)
+                        setGraphData(prevGraphData => {
+                            setPrevGraphData(prevGraphData)
+                            setColorLinks(prevColorLinks => { return assignColorsToCompleteNodes(data.graph, prevColorLinks, rainbowColors) })
+                            return data.graph
+                        })
                     }
                     else {
                         // 2. Assign selected node
@@ -288,27 +367,32 @@ const RouteFinding = () => {
             if (startingArtist && endArtist) {
                 try {
                     routeFound.current = false;
-                    setTimer(0)
+                    setColorLinks({});
+                    usedColors.clear();
+                    setTimer(0);
                     setHideSelectors(true);
                     setProgressBarPercent(null);
-                    setFindRouteString("Finding Route...")
+                    setFindRouteString("Finding Route...");
                     startTimer();
                     const response = await axios.post('http://localhost:8000/routes/find', {
                         starting_artist: startingArtist,
                         ending_artist: endArtist,
                         websocket_id: wsId
                     });
-                    stopTimer()
-                    routeFound.current = true
+                    stopTimer();
+                    routeFound.current = true;
                     setFindRouteString("Find Route");
                     console.log('Route:', response.data.route_list);
-                    console.log("Final Graph: ")
+                    console.log("Final Graph: ");
                     console.log(response.data.graph)
                     setDisplayMessage('Route: ' + response.data.route_list.map(artist => artist.name).join(' -> '));
                     setSecondaryMessage("");
                     setProgressBarPercent(null);
-                    setPrevGraphData(graphData)
-                    setGraphData(response.data.graph)
+                    setGraphData(prevGraphData => {
+                        setPrevGraphData(prevGraphData)
+                        setColorLinks(prevColorLinks => { return assignColorsToCompleteNodes(response.data.graph, prevColorLinks, rainbowColors) })
+                        return response.data.graph
+                    })
                 } catch (error) {
                     console.error('Error finding route:', error);
                 }
@@ -397,8 +481,8 @@ const RouteFinding = () => {
 
                         {hideGraph ? (
                             <>
-                            {/* Hiding Graph has extra ml-4 to pad and avoid moving stuff.  */}
-                                <Typography className="text-txt dark:text-darkTxt mr-2 ml-4"> Hiding Graph</Typography> 
+                                {/* Hiding Graph has extra ml-4 to pad and avoid moving stuff.  */}
+                                <Typography className="text-txt dark:text-darkTxt mr-2 ml-4"> Hiding Graph</Typography>
                                 <EyeSlashIcon className="h-6 w-6 text-txt dark:text-darkTxt transition-transform duration-300 transform hover:rotate-180" />
                             </>
                         ) : (
@@ -485,6 +569,7 @@ const RouteFinding = () => {
                         onEdgeSelect={handleEdgeSelect}
                         hideGraph={hideGraph}
                         doGraphCalculations={doGraphCalculations}
+                        colorLinks={colorLinks}
                     />
                 )}
             </div>

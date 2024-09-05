@@ -216,8 +216,8 @@ class GraphArtist(BaseModel):
             "last_updated_print": self.last_updated.strftime("%B %d, %Y at %I:%M %p") if self.last_updated else None,
             "genres": self.genres,
             "depth": self.depth,
-            "isComplete": self.is_complete,
-            "isSelected": self.is_selected
+            "is_complete": self.is_complete,
+            "is_selected": self.is_selected
         }
     
 class GraphConnection(BaseModel):
