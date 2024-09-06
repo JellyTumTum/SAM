@@ -194,8 +194,10 @@ async def get_detailed_album_info(album_ids: List[str], ws_connection=None) -> L
         for album_data in data['albums']:
             if 'tracks' in album_data:
                 for track_data in album_data['tracks']['items']:
+                    missing_fields = [field for field in ['href', 'id', 'name', 'preview_url'] if field not in track_data]
                     if 'artists' in track_data:
                         track_data['artists'] = [TrackArtist(**artist) for artist in track_data['artists']]
+                    track_data['preview_url'] = track_data.get('preview_url', None) # wierd issue arose where suddenly this missing was an issue, so had to use .get like the other 2.
                     track_data['is_playable'] = track_data.get('is_playable', None)
                     track_data['popularity'] = track_data.get('popularity', None)
                 album_data['tracks'] = AlbumTracks(**album_data['tracks'])
@@ -224,12 +226,12 @@ async def get_connections(artist: Artist, db : Session = None, ws_connection = N
     print(f"Finding connections for {artist.name}")
     if db:
         print(f"Checking db for up-to-date artist entry")
-        artist = update_artist_with_db(db, artist)
+        artist = update_artist_with_db(db, artist, require_all_connections=True)
     print(f"get_connections | connections length for {artist.name} : {len(artist.connections)}")
     if len(artist.connections) > 2: # and artist.lastUpdated.astimezone(pytz.utc) > datetime.now(pytz.utc) - timedelta(days=7) --> Add back in once lastUpdated is fixed
         print(f"Using Database Cached Connections")
         if ws_connection:
-            send_status_update(ws_connection, f"Importing Cached Collaborations for {artist.name}")
+            await send_status_update(ws_connection, f"Importing Cached Collaborations for {artist.name}")
         return artist.connections
     albums = await get_artist_albums(artist.id, all_albums=True, ws_connection=ws_connection)
     artist.lastUpdated = datetime.now(pytz.utc)
@@ -417,12 +419,12 @@ async def set_selected_artist(ws_connection, selected_artist: Artist, graph_mana
         graph_manager.set_selected_artist(selected_artist)
         graph = graph_manager.get_graph()
         await ws_connection.send_text(json.dumps({"update_type": "selection", 
-                                              "message": f"Artist selected for expansion : {selected_artist.name}", 
+                                              "message": f"Gathering collaborations : {selected_artist.name}", 
                                               "graph": graph.to_dict(),
                                               "full_graph": True}))
     else:
         await ws_connection.send_text(json.dumps({"update_type": "selection", 
-                                              "message": f"Artist selected for expansion : {selected_artist.name}", 
+                                              "message": f"Gathering collaborations : {selected_artist.name}", 
                                               "selected_artist": selected_artist.id,
                                               "full_graph": False}))
 
@@ -512,6 +514,7 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
             artist_route.append(artist)
             print(f"added {artist.name} to artist_route. -> [{', '.join([artist.name for artist in artist_route])}]")
         found = True
+    
     while not found: 
         
         #1. sort unchecked_artists.
@@ -519,6 +522,10 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
         #2. remove last artist from the list and get their connections. 
         artist_with_connections_found = False
         while not artist_with_connections_found:
+            if len(unchecked_artists) == 0:
+                found = True
+                artist_route = []
+                break  # To exit the while loop if unchecked_artists is empty
             chosen_artist : Tuple[Artist, int, int, List[Artist]] = unchecked_artists.pop(-1)
             print(f"chosen_artist = {chosen_artist[0].name}. Depth: {chosen_artist[1]}. Weight: {chosen_artist[2]}. Previous_connections = [{', '.join([artist.name for artist in chosen_artist[3]])}]")
             if (not send_full_graph):
@@ -531,7 +538,9 @@ async def find_route(starting_artist: Artist, ending_artist: Artist, ws_connecti
                 if len(unchecked_artists) == 0:
                     found=True
                     artist_route = []
-        
+                    
+        if found:
+            break
         await send_route_update(ws_connection, graph_manager, f"Connections for {chosen_artist[0].name} added", chosen_artist[0], chosen_artist[1], send_full_graph=send_full_graph)
         if db:
             save_artist(db, chosen_artist[0])

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ArtistSelectionCard from './ArtistSelectionCard';
-import { Button, Switch, Typography } from '@material-tailwind/react';
+import { Button, Card, Switch, Typography } from '@material-tailwind/react';
 import axios from 'axios';
 import DynamicGraph from './DynamicGraph';
 import ShowcaseArtist from './ShowcaseArtist';
 import StatusDisplay from './StatusDisplay';
 
-import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/solid';
+import { EyeIcon, EyeSlashIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { color } from 'd3';
 
 const RouteFinding = () => {
@@ -21,10 +21,13 @@ const RouteFinding = () => {
     const [displayMessage, setDisplayMessage] = useState(null);
     const [secondaryMessage, setSecondaryMessage] = useState(null)
     const [progressBarPercent, setProgressBarPercent] = useState(null);
+    const [expandedArtists, setExpandedArtists] = useState(null);
     const routeFound = useRef(true);
     const [routeTimer, setRouteTimer] = useState(null);
 
     // UI Information
+    const [highlightRoute, setHighlightRoute] = useState(false);
+    const [hasErrored, setHasErrored] = useState(false)
     const [hideSelectors, setHideSelectors] = useState(false);
     const [hideGraph, setHideGraph] = useState(false);
     const [doGraphCalculations, setDoGraphCalculations] = useState(true);
@@ -37,6 +40,7 @@ const RouteFinding = () => {
     ];
     const [colorLinks, setColorLinks] = useState({});
     const usedColors = new Set();
+    const [showUsefulInformation, setShowUsefulInformation] = useState(false);
 
     // Timer state
     const [timer, setTimer] = useState(0); // in milliseconds
@@ -52,22 +56,6 @@ const RouteFinding = () => {
     const [pingInterval, setPingInterval] = useState(null);
 
 
-    // const sampleData = {
-    //     "nodes": [
-    //         { "id": "1", "name": "Artist A", "popularity": 80, "artURL": "https://i.scdn.co/image/ab6761610000e5ebe672b5f553298dcdccb0e676", "followers": 1000000, "genres": ["Pop", "Rock"] },
-    //         { "id": "2", "name": "Artist B", "popularity": 70, "artURL": "https://i.scdn.co/image/ab6761610000e5eb3bcef85e105dfc42399ef0ba", "followers": 800000, "genres": ["Hip Hop"] },
-    //         { "id": "3", "name": "Artist C", "popularity": 90, "artURL": "https://i.scdn.co/image/ab67616100005174ee3f614c84b9a473cbdb8e07", "followers": 1200000, "genres": ["Jazz", "Blues"] },
-    //         { "id": "4", "name": "Artist D", "popularity": 60, "artURL": "https://i.scdn.co/image/ab676161000051743c350f20203c8bc10c0b5a9f", "followers": 500000, "genres": ["Country"] }
-    //     ],
-    //     "links": [
-    //         { "source": "1", "target": "2" },
-    //         { "source": "2", "target": "3" },
-    //         { "source": "3", "target": "4" },
-    //         { "source": "4", "target": "1" }
-    //     ]
-    // }
-
-    // Timer formatting function
     const switchGraphCalculations = () => {
         if (doGraphCalculations) {
             setHideGraph(true)
@@ -78,6 +66,14 @@ const RouteFinding = () => {
         }
     }
 
+    const switchHighlightRoute = () => {
+        if (highlightRoute) {
+            setHighlightRoute(false)
+        } else {
+            setHighlightRoute(true)
+        }
+    }
+
     const formatTime = (milliseconds) => {
         const seconds = Math.floor(milliseconds / 1000);
         const ms = (milliseconds % 1000) / 10; // To get two decimal points
@@ -85,7 +81,7 @@ const RouteFinding = () => {
     };
 
     const startTimer = () => {
-        const startTime = Date.now(); // Capture the start time
+        const startTime = Date.now();
 
         timerRef.current = setInterval(() => {
             setTimer(Date.now() - startTime);
@@ -96,14 +92,6 @@ const RouteFinding = () => {
         clearInterval(timerRef.current); // Clear the interval to stop the timer
     };
 
-    // I do not understand this one bit. but it works. 
-    function generateColor(index) {
-        // Generate a color using HSL (hue, saturation, lightness)
-        const hue = (index * 137.508) % 360; // Use golden angle to distribute colors evenly
-        const saturation = 70 + Math.random() * 20; // Slightly random saturation
-        const lightness = 50 + Math.random() * 20; // Slightly random lightness
-        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-    }
 
     function hashStringToColor(str) {
         // Hash the string (artist ID) to generate a consistent integer
@@ -111,12 +99,12 @@ const RouteFinding = () => {
         for (let i = 0; i < str.length; i++) {
             hash = str.charCodeAt(i) + ((hash << 5) - hash);
         }
-    
+
         // Convert the hash to a hex color using HSL
         const hue = Math.abs(hash) % 360;  // Use the hash to generate a hue (0-360)
         const saturation = 70 + Math.random() * 20; // Randomize saturation slightly
         const lightness = 50 + Math.random() * 20; // Randomize lightness slightly
-    
+
         return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     }
 
@@ -158,6 +146,21 @@ const RouteFinding = () => {
         return colorLinks;
     }
 
+    const setUsefulInformation = (value) => {
+        setShowUsefulInformation(value)
+        localStorage.setItem('showInformation', JSON.stringify(value));
+    }
+
+    useEffect(() => {
+        const showInformationLocalStorage = localStorage.getItem('showInformation');
+
+        if (showInformationLocalStorage === null) {
+            localStorage.setItem('showInformation', 'true');
+            setShowUsefulInformation(false);
+        } else {
+            setShowUsefulInformation(JSON.parse(showInformationLocalStorage));
+        }
+    }, []);
 
     useEffect(() => {
         const id = generateWebSocketId();
@@ -223,7 +226,7 @@ const RouteFinding = () => {
         socket.onmessage = (event) => {
             if (routeFound.current === false) {
                 const data = JSON.parse(event.data);
-                console.log(data);
+                // console.log(data);
 
                 if (data.update_type === "start") {
                     // Special Case for the first message as it contains just the starting artist and it needs to be set as selected not complete but uses the route configuration. 
@@ -261,6 +264,7 @@ const RouteFinding = () => {
 
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
+                    setExpandedArtists(prevExpandedArtists => prevExpandedArtists + 1)
                     console.log("RouteFound = " + routeFound + " message = " + data.message)
                     if (data.full_graph) {
                         setGraphData(prevGraphData => {
@@ -315,8 +319,9 @@ const RouteFinding = () => {
                      "message": display_message,
                      "progress": progress_bar}
                     */
+                    console.log(data)
                     setSecondaryMessage(data.message)
-                    setProgressBarPercent(data.progress_bar_percent)
+                    setProgressBarPercent(data.progress)
                 }
 
             }
@@ -370,8 +375,10 @@ const RouteFinding = () => {
                     setColorLinks({});
                     usedColors.clear();
                     setTimer(0);
+                    setHasErrored(false)
                     setHideSelectors(true);
                     setProgressBarPercent(null);
+                    setExpandedArtists(0);
                     setFindRouteString("Finding Route...");
                     startTimer();
                     const response = await axios.post('http://localhost:8000/routes/find', {
@@ -395,6 +402,12 @@ const RouteFinding = () => {
                     })
                 } catch (error) {
                     console.error('Error finding route:', error);
+                    stopTimer()
+                    setHasErrored(true)
+                    setFindRouteString("Find Route");
+                    setDisplayMessage("An Error occured while attempting to find a path.")
+                    setSecondaryMessage(error.response.data.detail + " To prevent further issues, please refresh the page to re-establish a connection");
+
                 }
             } else {
                 console.log('one or two artists missing');
@@ -441,6 +454,11 @@ const RouteFinding = () => {
                         <Typography className="text-txt dark:text-darkTxt">Time Elapsed:</Typography>
                         <Typography className="text-txt dark:text-darkTxt">{formatTime(timer)}</Typography>
                     </div>
+                    <InformationCircleIcon onClick={event => { setUsefulInformation(true) }} className='
+                h-6 w-6
+                text-accent dark:text-darkAccent'>
+
+                    </InformationCircleIcon>
                 </div>
 
 
@@ -463,7 +481,7 @@ const RouteFinding = () => {
                                 <input id="generationSwitch" type="checkbox"
                                     class="absolute w-8 h-4 transition-colors duration-300 rounded-full appearance-none cursor-pointer peer bg-background dark:bg-darkBackground"
                                     defaultValue={doGraphCalculations}
-                                    defaultChecked
+                                    defaultChecked={doGraphCalculations}
                                     onChange={switchGraphCalculations} />
                                 <label htmlFor="generationSwitch"
                                     class="before:content[''] absolute top-2/4 -left-1 h-5 w-5 -translate-y-2/4 cursor-pointer rounded-full border border-background dark:border-darkBackground bg-negative shadow-md transition-all duration-300 before:absolute before:top-2/4 before:left-2/4 before:block before:h-10 before:w-10 before:-translate-y-2/4 before:-translate-x-2/4 before:rounded-full before:bg-negative before:opacity-0 before:transition-opacity hover:before:opacity-10 peer-checked:translate-x-full peer-checked:bg-positive peer-checked:before:bg-positive">
@@ -495,8 +513,77 @@ const RouteFinding = () => {
                 </div>
             </div>
 
+            {/* Useful Information box */}
+            {showUsefulInformation &&
+                <Card
+                    className={`
+                h-3/5 w-11/12 
+                m-4 mb-2
+                flex flex-col
+                bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg justify-between items-center border-2 border-accent dark:border-darkAccent relative`}
+                >
+                    <XMarkIcon onClick={event => { setUsefulInformation(false) }} className='absolute top-4 right-4
+                h-6 w-6
+                text-negative'>
+
+                    </XMarkIcon>
+                    <Typography className="text-txt dark:text-darkTxt mt-2" variant='h3'>Useful Information </Typography>
+                    <div className='flex flex-row h-full w-full justify-between pb-4 px-4'>
+                        {/* <Card className={`transition-all duration-300 ease-in-out overflow-visible 
+                h-full w-auto 
+                p-2
+                flex flex-col
+                bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg items-center  border-accent dark:border-darkAccent relative`}>
+                        <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-md" variant='h4'>Instructions</Typography>
+                        <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                            1. Enter a starting and ending artist
+                        </Typography>
+                        <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                            2. Adjust settings as needed.
+                        </Typography>
+                    </Card> */}
+                        <Card className={`transition-all duration-300 ease-in-out overflow-visible 
+                h-full w-auto
+                p-2
+                flex flex-col
+                bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg items-center  border-accent dark:border-darkAccent relative`}>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-md" variant='h4'>Settings</Typography>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                                1. Graph Generation: This controls if the graph is generated when receiving graph updates (this includes the physics so if toggled on the graph will render and go through physics operations)
+                            </Typography>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                                2. Graph Visibility: Controls only the visibility of the graph. when Hidden, the graph will still run all physics operations on the nodes.
+                            </Typography>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                                3. Highlight Path: Can be toggled to lower visibility on the non-crucial nodes. during generation as the route is not known no paths are highlighted so only explored artists will be highlighted.
+                            </Typography>
+                        </Card>
+                        <Card className={`transition-all duration-300 ease-in-out overflow-visible 
+                h-full w-auto
+                p-2
+                flex flex-col
+                bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg items-center border-accent dark:border-darkAccent relative`}>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-md" variant='h4'>Tips for usability</Typography>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                                Due to the potential time and space complexity of some of the calculations, the settings described here can be adjusted to make for a better experience. Note that even with these adjusted, some routes are either impossible for the algorithm to find, or take so long that the program essentially cant find it. This is partly due to an unoptimized algorithm on my half, and partly due to the time cost of fetching large ammounts of information from the spotify API. The information being gathered is shown with progress bars at the bottom of the display area during runtime.
+                            </Typography>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                                1. Visual clutter Reduction: for extensive searches, especially if they are searching the less popular artists, hiding the graph may be recommended to prevent spasms from the updating graphs initial physics operations. This effect is amplified more when artists only have a few albums to scrape through resulting in quick successive regenerations of the graph.
+                            </Typography>
+                            <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
+                                2. Preventing Lag: Due to the high number of physics operations (that increase exponentially with graph size), halting the graphs generation does lead to some performance benefit (however quickly dimishes as graphs grow in size), so it can make larger graphs more user-friendly.
+                            </Typography>
+                            <Typography className="text-red-300 text-left text-sm mt-2" variant='paragraph'>
+                                Even with setting optimisations, some artists either have so many albums to scrape that it will take over a minute just to retrieve the information from spotify, or the path is so hard to find the less than optimal algorithm I use to decide on the next artist cannot find the correct artist (out of potentially 1000s) within a reasonable time-frame before the graph is a physics nightmare to calculate anyway (resulting in a frozen webpage normally, if this happens just close the tab as the routes a lost cause if it hasnt already crashed by this point)
+                            </Typography>
+
+                        </Card>
+                    </div>
+                </Card>
+            }
+
             {/* Main Graph Container */}
-            <div className="relative w-11/12 mx-4 mt-4 mb-4 h-full border-2 border-accent dark:border-darkAccent rounded-md">
+            <div className="relative w-11/12 mx-4 mt-4 mb-4 h-full border-2 border-accent dark:border-darkAccent rounded-md overflow-hidden">
                 {/* Artist Selection Cards */}
                 <div className="absolute top-4 left-4">
                     <ArtistSelectionCard
@@ -524,6 +611,32 @@ const RouteFinding = () => {
                         {findRouteString}
                     </Button>
                 </div>
+
+                <Card
+                    className={`transition-all duration-300 ease-in-out overflow-visible 
+                        h-10 w-80
+                        absolute left-4 ${hideSelectors ? 'top-20' : 'top-[26rem]'}
+                        bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg p-4 flex flex-col justify-between items-center mb-2 border-accent dark:border-darkAccent`}
+                >
+                    <div class="inline-flex items-center -mt-2">
+                        <div class="inline-flex items-center">
+                            <div class="relative inline-block w-8 h-4 rounded-full cursor-pointer">
+                                <input id="highlightSwitch" type="checkbox"
+                                    class="absolute w-8 h-4 transition-colors duration-300 rounded-full appearance-none cursor-pointer peer bg-background dark:bg-darkBackground"
+                                    defaultValue={highlightRoute}
+                                    defaultChecked={highlightRoute}
+                                    onChange={switchHighlightRoute} />
+                                <label htmlFor="highlightSwitch"
+                                    class="before:content[''] absolute top-2/4 -left-1 h-5 w-5 -translate-y-2/4 cursor-pointer rounded-full border border-background dark:border-darkBackground bg-negative shadow-md transition-all duration-300 before:absolute before:top-2/4 before:left-2/4 before:block before:h-10 before:w-10 before:-translate-y-2/4 before:-translate-x-2/4 before:rounded-full before:bg-negative before:opacity-0 before:transition-opacity hover:before:opacity-10 peer-checked:translate-x-full peer-checked:bg-positive peer-checked:before:bg-positive">
+                                    {/* peer-checked : when its enabled -> peer is due to it linking to the actual checkbox input above */}
+                                    <div class="inline-block p-5 rounded-full top-2/4 left-2/4 -translate-x-2/4 -translate-y-2/4"
+                                        data-ripple-dark="true"></div>
+                                </label>
+                            </div>
+                        </div>
+                        <Typography className="text-txt dark:text-darkTxt ml-4">Highlight Path</Typography>
+                    </div>
+                </Card>
 
                 {/* Showcase Artists */}
                 {showcaseArtist && (
@@ -553,8 +666,10 @@ const RouteFinding = () => {
                         <StatusDisplay
                             primaryMessage={displayMessage}
                             secondaryMessage={secondaryMessage}
-                            progress_bar_percent={progressBarPercent}
-                            complete_route={routeFound.current}
+                            progressBarPercent={progressBarPercent}
+                            completeRoute={routeFound.current}
+                            hasErrored={hasErrored}
+                            expandedArtists={expandedArtists}
                         />
                     </div>
                 )}
@@ -570,6 +685,7 @@ const RouteFinding = () => {
                         hideGraph={hideGraph}
                         doGraphCalculations={doGraphCalculations}
                         colorLinks={colorLinks}
+                        highlightRoute={highlightRoute}
                     />
                 )}
             </div>
@@ -585,19 +701,8 @@ export default RouteFinding;
 /*
 
 BUGS:
+    - Websocket dropping. 
+        - need to detect and either halt operation or get reconnection working. 
     - Figure out why genres are not being saved to database. it is effecting algorithm due to not calculating weights properly when loaded from db. 
-    - When found in one link there is no complete lines. 
     - Longer Searches seem to fail, both http timeout (30s) is reached and the websocket collapses somehow
-        - Catch http errors and update the user / close the page idk something that fixees the mess that follows a failed search
-
-TODO: 
-    - Convert DarkMode switch to same type as for graph logic
-    - Ways to centralise nodes based on selected artists? (if selected from the route mapping) 
-
-Add adjusters for the physics factors 
-    -> UI Redesign so the viewing window is a lot bigger.
-        -> Add a connection symbol that notes if a websocket connection is present. 
-        -> Adjust ArtistSelection Cards to be more compact, and placed either side of the screen.
-        -> Make and implement the 'ArtistShowcase' which shows the last selectedArtist (should be closable) and implement endpoints to provide more information on the connections.
-
 */

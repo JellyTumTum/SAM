@@ -61,9 +61,10 @@ const ShowcaseArtist = ({ artist, onClose }) => {
                         {/* <Typography variant="h6" className="text-txt dark:text-darkTxt">
               Graph Specific:
             </Typography> */}
-                        <Typography variant="body2" className="text-sm text-accent dark:text-darkAccent">
-                            Collaborations: {artist.connectionCount || 'Unknown'}
-                        </Typography>
+                            <Typography variant="body2" className={`text-sm text-accent dark:text-darkAccent ${artist.connectionCount > 1 ? 'opacity-100' : 'opacity-0'}`}>
+                                Collaborations: {artist.connectionCount || 'Unknown'}
+                            </Typography>
+
                         {artist.depth > 0 &&
                             <Typography variant="body2" className="text-sm text-accent dark:text-darkAccent">
                                 Depth: {artist.depth || 'Unknown'}

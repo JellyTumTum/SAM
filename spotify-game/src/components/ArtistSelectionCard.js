@@ -17,7 +17,7 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimiz
     const [searchResults, setSearchResults] = useState([]);
     const [highlightedIndex, setHighlightedIndex] = useState(0); // Index for keyboard navigation
     const [minimized, setMinimized] = useState(minimize);
-    const cardRef = useRef(null); // Ref to detect clicks outside
+    const cardRef = useRef()
 
     const placeLeft = title.includes('Starting');
 
@@ -133,16 +133,16 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimiz
                             <div className="text-3xl text-txt dark:text-darkTxt">?</div>
                         )}
                     </div>
-                    <Typography variant="body1" className="text-lg font-semibold text-txt dark:text-darkTxt mb-1">
+                    <Typography variant="paragraph" className="text-lg font-semibold text-txt dark:text-darkTxt mb-1">
                         {selectedArtist?.name}
                     </Typography>
                     {selectedArtist && (
-                        <Typography variant="body1" className="text-sm text-accent dark:text-darkAccent">
+                        <Typography variant="paragraph" className="text-sm text-accent dark:text-darkAccent">
                             Followers: {selectedArtist?.followers.toLocaleString()}
                         </Typography>
                     )}
                     {selectedArtist && (
-                        <Typography variant="body1" className="text-sm text-accent dark:text-darkAccent mb-1">
+                        <Typography variant="paragraph" className="text-sm text-accent dark:text-darkAccent mb-1">
                             Popularity: {selectedArtist?.popularity}
                         </Typography>
                     )}

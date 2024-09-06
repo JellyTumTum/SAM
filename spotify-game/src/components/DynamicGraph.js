@@ -11,11 +11,13 @@ ADDITIONS / ADJUSTMENTS:
 
 */
 
-const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, completeGraph = false, onNodeSelect, onEdgeSelect, hideGraph = false, doGraphCalculations = true, colorLinks}) => {
+const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, completeGraph = false, onNodeSelect, onEdgeSelect, hideGraph = false, doGraphCalculations = true, colorLinks, highlightRoute }) => {
     const svgRef = useRef();
     const isDark = localStorage.getItem('darkMode') === 'true';
+
     const [runGraphCalculations, setRunGraphCalculations] = useState(doGraphCalculations)
     const completeIndex = []
+    console.log(highlightRoute)
     const colors = {
         background: isDark ? themeColours.darkBackground : themeColours.background,
         background2: isDark ? themeColours.darkBackground2 : themeColours.background2,
@@ -40,11 +42,45 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
     };
     const scaledMin = 50 * scaleFactor;
     const scaledMax = 100 * scaleFactor;
+    const hiddenOpacity = 0.1
     // console.log(colorLinks)
 
     useEffect((doGraphCalculations) => {
         setRunGraphCalculations(doGraphCalculations)
     })
+
+    useEffect(() => {
+        // Select and update link opacity
+        d3.selectAll('line')
+            .attr('stroke-opacity', link => {
+                if (highlightRoute) {
+                    return link.inRoute ? 1 : hiddenOpacity;
+                } else {
+                    return 1;
+                }
+            });
+    
+        // Select and update node opacity
+        d3.selectAll('g')
+            .select('circle')
+            .attr('opacity', artist => {
+                if (highlightRoute) {
+                    return artist.inRoute ? 1 : hiddenOpacity;
+                } else {
+                    return 1;
+                }
+            });
+    
+        d3.selectAll('g')
+            .select('image')
+            .attr('opacity', artist => {
+                if (highlightRoute) {
+                    return artist.is_complete ? 1 : hiddenOpacity;
+                } else {
+                    return 1;
+                }
+            });
+    }, [highlightRoute]);
 
 
     useEffect(() => {
@@ -55,10 +91,18 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
 
         let svg = d3.select(svgRef.current);
         let zoomTransform = d3.zoomIdentity; // Initialize the zoom transform
+        let initialTransform = null; // Change 'const' to 'let'
+        const defaultZoomLevel = 0.3;
+        let customZoom = false; // Change 'const' to 'let'
 
         // Preserve the current zoom level if it's already set
         if (svgRef.current.__zoom) {
             zoomTransform = svgRef.current.__zoom;
+            customZoom = true; // Reassign the value
+        } else {
+            initialTransform = d3.zoomIdentity
+                .translate(width / 2, height / 2)  // Translate the graph to the center
+                .scale(defaultZoomLevel);  // Apply the default zoom level
         }
 
         svg = svg
@@ -74,7 +118,12 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
             svgRef.current.__zoom = event.transform; // Store the current zoom transform
         });
 
-        svg.call(zoom).call(zoom.transform, zoomTransform); // Reapply the previous zoom level
+        // Apply either the custom zoom or the default zoom level
+        if (customZoom) {
+            svg.call(zoom).call(zoom.transform, zoomTransform); // Reapply the previous zoom level
+        } else {
+            svg.call(zoom).call(zoom.transform, initialTransform); // Apply default zoom level
+        }
 
 
         // Sets initial positions and velocities based on previous graph data
@@ -92,7 +141,7 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
 
 
         // Normalize function
-        const normalize = (value, min, max) => (value - min) / (max - min);
+        // const normalize = (value, min, max) => (value - min) / (max - min);
 
         // // Custom clustering force
         // const clusterForce = (completeGraph) => {
@@ -210,24 +259,24 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
 
         const repelCompletedNodes = (alpha) => {
             const completeNodes = graphData.nodes.filter(node => node.is_complete);
-        
+
             // Apply repulsion between all pairs of complete nodes
             for (let i = 0; i < completeNodes.length; i++) {
                 for (let j = i + 1; j < completeNodes.length; j++) {
                     const nodeA = completeNodes[i];
                     const nodeB = completeNodes[j];
-        
+
                     const dx = nodeB.x - nodeA.x;
                     const dy = nodeB.y - nodeA.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
                     if (distance > 0) {
                         // Adjust this strength value for desired repulsion force
                         const strength = alpha * (-1000 / distance); // Repulsion inversely proportional to distance
-        
+
                         // Repulsion force to push nodes apart
                         const repulsionForce = strength / distance;
-        
+
                         // Update velocities for both nodes to move them apart
                         nodeA.vx -= (dx / distance) * repulsionForce;
                         nodeA.vy -= (dy / distance) * repulsionForce;
@@ -271,7 +320,17 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
                 // const lowestDepth = Math.min(source.depth, target.depth);
                 // return colors.depths[lowestDepth];
             })
-            .attr('stroke-opacity', 1)
+            .attr('stroke-opacity', link => {
+                if (highlightRoute) {
+                    if (link.inRoute) {
+                        return 1
+                    } else {
+                        return hiddenOpacity
+                    }
+                } else {
+                    return 1
+                }
+            })
             .attr('stroke-width', link => {
                 if (link.inRoute) { return scaledMin / 4 }
                 else { return scaledMin / 8 }
@@ -309,7 +368,7 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
                 if (artist.depth < 0) {
                     return colors.txt;
                 } else {
-                    return colors.depths[artist.depth]
+                    return colors.depths[artist.depth];
                 }
             })
             .attr('stroke-width', artist => {
@@ -320,6 +379,14 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
                     return scaledMin / 6;
                 } else {
                     return scaledMin / 12; // Default stroke width
+                }
+            })
+            .attr('opacity', artist => {
+                // Set opacity based on highlightRoute flag
+                if (highlightRoute) {
+                    return artist.inRoute ? 1 : hiddenOpacity;
+                } else {
+                    return 1;
                 }
             });
 
@@ -333,7 +400,14 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
             .on('click', (event, artist) => {
                 onNodeSelect(artist);
                 console.log(`node (${artist.name}) clicked`);
-                console.log(artist)
+                console.log(artist);
+            })
+            .attr('opacity', artist => {
+                if (highlightRoute) {
+                    return artist.is_complete ? 1 : hiddenOpacity;
+                } else {
+                    return 1;
+                }
             });
 
         node.append('title')

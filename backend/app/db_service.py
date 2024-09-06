@@ -199,7 +199,7 @@ def combine_dto_artists(dto_artist_1: DtoArtist, dto_artist_2: DtoArtist, connec
 def get_artist_by_id(db: Session, artist_id: str, require_all_connections=False) -> DtoArtist:
     # Use joinedload to eagerly load genres and connections to keep them attached to the session.
     db_artist = db.query(DbArtist).filter(DbArtist.id == artist_id).options(joinedload(DbArtist.genres), joinedload(DbArtist.connections)).first()
-    if require_all_connections and db_artist.connections < 1:
+    if require_all_connections and db_artist and len(db_artist.connections) < 1:
         # to detect if the connections are extensive (main_artists connections have been explored and are not just the 3rd party ones (related_connections)) 
         return None
     if db_artist:
