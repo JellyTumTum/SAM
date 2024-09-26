@@ -8,9 +8,9 @@ import StatusDisplay from './StatusDisplay';
 
 import { CheckCircleIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import { EyeIcon, EyeSlashIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
-import { color } from 'd3';
 
 const RouteFinding = () => {
+    const API_URL = process.env.REACT_APP_API_URL;
     const [startingArtist, setStartingArtist] = useState(null);
     const [endArtist, setEndArtist] = useState(null);
 
@@ -54,7 +54,6 @@ const RouteFinding = () => {
     const [ws, setWs] = useState(null);
     const [wsId, setWsId] = useState(null);
     const [pingInterval, setPingInterval] = useState(null);
-
 
     const switchGraphCalculations = () => {
         if (doGraphCalculations) {
@@ -199,7 +198,7 @@ const RouteFinding = () => {
     };
 
     const createWebSocket = (id) => {
-        const socket = new WebSocket(`ws://localhost:8000/ws/${id}`);
+        const socket = new WebSocket(`ws://${API_URL}/ws/${id}`);
         console.log("Attempting to run socket.onopen");
 
         socket.onopen = () => {
@@ -381,7 +380,7 @@ const RouteFinding = () => {
                     setExpandedArtists(0);
                     setFindRouteString("Finding Route...");
                     startTimer();
-                    const response = await axios.post('http://localhost:8000/routes/find', {
+                    const response = await axios.post(`http://${API_URL}/routes/find`, {
                         starting_artist: startingArtist,
                         ending_artist: endArtist,
                         websocket_id: wsId
@@ -564,6 +563,9 @@ const RouteFinding = () => {
                 flex flex-col
                 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg items-center border-accent dark:border-darkAccent relative`}>
                             <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-md" variant='h4'>Tips for usability</Typography>
+                            <Typography className="text-red-400 dark:text-red-400 mt-2 text-left text-sm" variant='paragraph'>
+                                It has been detected you may be on a mobile device, this application was not designed for mobile use due to some incompatibilties with the graphing framework used. This means the application may be more difficult / unable to be used correctly
+                            </Typography>
                             <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
                                 Due to the potential time and space complexity of some of the calculations, the settings described here can be adjusted to make for a better experience. Note that even with these adjusted, some routes are either impossible for the algorithm to find, or take so long that the program essentially cant find it. This is partly due to an unoptimized algorithm on my half, and partly due to the time cost of fetching large ammounts of information from the spotify API. The information being gathered is shown with progress bars at the bottom of the display area during runtime.
                             </Typography>
