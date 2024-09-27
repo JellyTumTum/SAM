@@ -563,7 +563,7 @@ const RouteFinding = () => {
                 flex flex-col
                 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg items-center border-accent dark:border-darkAccent relative`}>
                             <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-md" variant='h4'>Tips for usability</Typography>
-                            <Typography className="text-red-400 dark:text-red-400 mt-2 text-left text-sm" variant='paragraph'>
+                            <Typography className="text-negative dark:text-negative mt-2 text-left text-sm" variant='paragraph'>
                                 It has been detected you may be on a mobile device, this application was not designed for mobile use due to some incompatibilties with the graphing framework used. This means the application may be more difficult / unable to be used correctly
                             </Typography>
                             <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
@@ -575,7 +575,7 @@ const RouteFinding = () => {
                             <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
                                 2. Preventing Lag: Due to the high number of physics operations (that increase exponentially with graph size), halting the graphs generation does lead to some performance benefit (however quickly dimishes as graphs grow in size), so it can make larger graphs more user-friendly.
                             </Typography>
-                            <Typography className="text-red-300 text-left text-sm mt-2" variant='paragraph'>
+                            <Typography className="text-negative text-left text-sm mt-2" variant='paragraph'>
                                 Even with setting optimisations, some artists either have so many albums to scrape that it will take over a minute just to retrieve the information from spotify, or the path is so hard to find the less than optimal algorithm I use to decide on the next artist cannot find the correct artist (out of potentially 1000s) within a reasonable time-frame before the graph is a physics nightmare to calculate anyway (resulting in a frozen webpage normally, if this happens just close the tab as the routes a lost cause if it hasnt already crashed by this point)
                             </Typography>
 

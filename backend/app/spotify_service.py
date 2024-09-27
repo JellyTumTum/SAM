@@ -27,7 +27,7 @@ SEARCH_URL = f"{SPOTIFY_API_BASE_URL}/search"
 access_token = None
 expiry_time = -1
 api_call_times = Queue()
-RATE_LIMIT = 90  # Example limit, adjust as necessary
+RATE_LIMIT = 90
 
 def get_spotify_headers():
     headers = {
@@ -52,7 +52,7 @@ def refresh_access_token():
 
     if response.status_code != 200:
         print(response.status_code)
-        print(response.text)  # Print the response text for detailed error information
+        print(response.text)
         raise HTTPException(status_code=response.status_code, detail="Error fetching access token")
 
     data = response.json()
