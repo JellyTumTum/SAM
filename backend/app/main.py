@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .models import Base, engine
 from .spotify_service import *
-from config import settings
 import pytz
 
 app = FastAPI()
@@ -15,7 +14,7 @@ app = FastAPI()
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000, http://cst.dev, https://cst.dev"], 
+    allow_origins=["http://localhost:3000, http://cst.dev/sam, https://cst.dev/sam"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
