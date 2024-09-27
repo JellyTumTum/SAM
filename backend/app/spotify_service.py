@@ -81,7 +81,7 @@ def make_spotify_call(url: str, headers, params=None):
         response = requests.get(url, headers=headers, params=params)
         if response.status_code == 429:  # 429 = rate limit exceeded.
             retry_after = int(response.headers.get("Retry-After", 1))  # 1 represents default value. shouldnt get activated
-            print(f"Rate limit exceeded. Retrying after {retry_after} seconds. | rolling calls : {call_result[1]}, expected outcome was : {"True" if call_result[0] else "False"}")
+            # print(f"Rate limit exceeded. Retrying after {retry_after} seconds. | rolling calls : {call_result[1]}, expected outcome was : {'True' if call_result[0] else 'False'}")
             time.sleep(retry_after)
         else:
             response.raise_for_status()  # Catches other errors. cause im definately gonna run into one somehow.
