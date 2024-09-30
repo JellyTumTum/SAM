@@ -11,6 +11,7 @@ import { EyeIcon, EyeSlashIcon, InformationCircleIcon } from '@heroicons/react/2
 
 const RouteFinding = () => {
     const API_URL = process.env.REACT_APP_API_URL;
+    const WS_URL = process.env.REACT_APP_WS_URL;
     const [startingArtist, setStartingArtist] = useState(null);
     const [endArtist, setEndArtist] = useState(null);
 
@@ -198,7 +199,7 @@ const RouteFinding = () => {
     };
 
     const createWebSocket = (id) => {
-        const socket = new WebSocket(`ws://${API_URL}/ws/${id}`);
+        const socket = new WebSocket(`${WS_URL}/ws/${id}`);
         console.log("Attempting to run socket.onopen");
 
         socket.onopen = () => {
@@ -380,7 +381,7 @@ const RouteFinding = () => {
                     setExpandedArtists(0);
                     setFindRouteString("Finding Route...");
                     startTimer();
-                    const response = await axios.post(`http://${API_URL}/routes/find`, {
+                    const response = await axios.post(`${API_URL}/routes/find`, {
                         starting_artist: startingArtist,
                         ending_artist: endArtist,
                         websocket_id: wsId

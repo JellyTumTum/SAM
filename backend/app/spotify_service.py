@@ -10,7 +10,6 @@ import pytz
 from fastapi import HTTPException, Depends
 from .db_service import *
 
-
 from .dtos import *
 
 # Environment variables for client ID and secret
