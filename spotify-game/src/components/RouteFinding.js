@@ -12,7 +12,7 @@ import { EyeIcon, EyeSlashIcon, InformationCircleIcon } from '@heroicons/react/2
 const RouteFinding = () => {
 
     const API_URL = process.env.API_URL;
-    const WS_URL = process.env.WS_URL; // leaving empty to fix one issue at a time and prevent some wierd error that I cant diagnose (hopefully)
+    const WS_URL = "/sam"; // actually url isnt needed it appears to be automatically put in there, just need the /sam added.
     const [startingArtist, setStartingArtist] = useState(null);
     const [endArtist, setEndArtist] = useState(null);
 

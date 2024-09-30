@@ -14,7 +14,13 @@ app = FastAPI()
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000, http://cst.dev/sam, https://cst.dev/sam"], 
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://cst.dev/sam", 
+        "https://cst.dev/sam",
+        "ws://cst.dev/sam", 
+        "wss://cst.dev/sam"      
+    ], # covering all the bases, best squash that error
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
