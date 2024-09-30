@@ -13,7 +13,7 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimize = false, setHideSelectors }) => {
 
-    const API_URL = process.env.API_URL; 
+    const API_URL = process.env.REACT_APP_API_URL; 
     const [searchQuery, setSearchQuery] = useState('');
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [searchResults, setSearchResults] = useState([]);

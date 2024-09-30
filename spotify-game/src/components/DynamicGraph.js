@@ -17,7 +17,6 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
 
     const [runGraphCalculations, setRunGraphCalculations] = useState(doGraphCalculations)
     const completeIndex = []
-    console.log(highlightRoute)
     const colors = {
         background: isDark ? themeColours.darkBackground : themeColours.background,
         background2: isDark ? themeColours.darkBackground2 : themeColours.background2,
