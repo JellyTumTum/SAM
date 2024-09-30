@@ -12,6 +12,8 @@ import {
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimize = false, setHideSelectors }) => {
+
+    const API_URL = process.env.API_URL; 
     const [searchQuery, setSearchQuery] = useState('');
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
@@ -36,7 +38,7 @@ const ArtistSelectionCard = ({ title, selectedArtist, setSelectedArtist, minimiz
         setSearchQuery(query);
         if (query.length > 0) {
             try {
-                const response = await axios.get(`http://localhost:8000/artist/search`, {
+                const response = await axios.get(`${API_URL}/artist/search`, {
                     params: { artist_name: query, max_results: 5 },
                 });
                 setSearchResults(response.data);
