@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 from .models import Base, engine
 from .spotify_service import *
 import pytz
+import asyncio
+
 
 app = FastAPI()
 
@@ -84,8 +86,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                               "websocket_id": f"{client_id}",
                                               "update_type": "connection_status"}))
     
-    # Log the update to the server console
-    print(f"Client {client_id} connected. Current connections: {list(connections.keys())}")
+    # Task to send ping messages every 5 seconds
+    async def ping():
+        while True:
+            try:
+                # Send a ping message
+                await websocket.send_text(json.dumps({"message": "ping", "websocket_id": client_id, "update_type": "ping"}))
+                await asyncio.sleep(5)  # Wait for 5 seconds before sending the next ping
+            except Exception as e:
+                print(f"Error in ping task: {e}")
+                break
+
+    # Start the ping task
+    ping_task = asyncio.create_task(ping())
     
     try:
         while True:
@@ -95,7 +108,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     except WebSocketDisconnect:
         print(f"Client {client_id} disconnected")
         del connections[client_id]
-        
+        # Cancel the ping task when the connection closes
+        ping_task.cancel()
         # Confirmation in the server that the connection was removed
         print(f"Client {client_id} removed. Current connections: {list(connections.keys())}")
 

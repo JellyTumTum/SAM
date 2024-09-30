@@ -48,6 +48,8 @@ const RouteFinding = () => {
     const [timer, setTimer] = useState(0); // in milliseconds
     const timerRef = useRef(null); // Reference to the timer interval
 
+    const webSocketTimerRef = useRef(null);
+
     // Showcase variables
     const [showcaseArtist, setShowcaseArtist] = useState(null);
     const [edgeArtist1, setEdgeArtist1] = useState(null);
@@ -203,6 +205,17 @@ const RouteFinding = () => {
         const socket = new WebSocket(`${WS_URL}/ws/${id}`);
         console.log("Attempting to run socket.onopen");
 
+        // Function to reset the connection timer
+        const resetWsTimer = () => {
+            if (webSocketTimerRef.current) {
+                clearTimeout(webSocketTimerRef.current); // Clear the existing timer
+            }
+            webSocketTimerRef.current = setTimeout(() => {
+                socket.close()
+                setHasWsConnection(false); // If no ping within 6 seconds, set connection to false
+            }, 6000); // 6-second timer
+        };
+
         socket.onopen = () => {
             console.log('WebSocket connection established');
             const interval = setInterval(() => {
@@ -221,6 +234,7 @@ const RouteFinding = () => {
         socket.onclose = (event) => {
             console.log(`WebSocket closed: Code = ${event.code}, Reason = ${event.reason}`);
             setHasWsConnection(false);
+            if (webSocketTimerRef.current) clearTimeout(webSocketTimerRef.current); // Clear the timer when connection closes
         };
 
         socket.onmessage = (event) => {
@@ -228,6 +242,9 @@ const RouteFinding = () => {
             if (data.update_type === "connection_status") {
                 console.log(data.message)
                 setHasWsConnection(true)
+            }
+            if (data.update_type === "ping") {
+                resetWsTimer()
             }
 
 
@@ -337,6 +354,7 @@ const RouteFinding = () => {
         };
         socket.onclose = () => {
             console.log('WebSocket connection closed, attempting to reconnect');
+            setHasWsConnection(false);
             clearInterval(pingInterval);
             const newId = generateWebSocketId();
             setWsId(newId);
