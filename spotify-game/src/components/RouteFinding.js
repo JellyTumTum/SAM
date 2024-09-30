@@ -10,6 +10,7 @@ import { CheckCircleIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/sol
 import { EyeIcon, EyeSlashIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
 const RouteFinding = () => {
+    
     const API_URL = process.env.API_URL;
     const WS_URL = null; // leaving empty to fix one issue at a time and prevent some wierd error that I cant diagnose (hopefully)
     const [startingArtist, setStartingArtist] = useState(null);
