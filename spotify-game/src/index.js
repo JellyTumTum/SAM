@@ -7,16 +7,16 @@ import App from './App';
 // Loading dark mode from storage (prevents reseting)
 const savedDarkMode = localStorage.getItem('darkMode');
 if (savedDarkMode === 'true') {
-  document.documentElement.classList.add('dark');
+    document.documentElement.classList.add('dark');
 } else {
-  document.documentElement.classList.remove('dark');
+    document.documentElement.classList.remove('dark');
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-//   <React.StrictMode>
+    //   <React.StrictMode>
     <ThemeProvider>
-      <App />
+        <App />
     </ThemeProvider>
-//  </React.StrictMode>
+    //  </React.StrictMode>
 );

@@ -205,7 +205,6 @@ const RouteFinding = () => {
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
-            setHasWsConnection(true);
             const interval = setInterval(() => {
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify({ type: 'ping' }));
@@ -225,6 +224,13 @@ const RouteFinding = () => {
         };
 
         socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.update_type === "connection_status") {
+                console.log(data.message)
+                setHasWsConnection(true)
+            }
+
+
             if (routeFound.current === false) {
                 const data = JSON.parse(event.data);
                 // console.log(data);
@@ -466,7 +472,7 @@ const RouteFinding = () => {
                 {/* WebSocket Status */}
                 <div className="flex items-center space-x-2">
                     <Typography className="text-txt dark:text-darkTxt">Connection Status:</Typography>
-                    {routeFound.current ? (
+                    {hasWsConnection ? (
                         <CheckCircleIcon className="h-6 w-6 text-positive" />
                     ) : (
                         <XCircleIcon className="h-6 w-6 text-negative" />
@@ -611,7 +617,7 @@ const RouteFinding = () => {
 
                 {/* Button Between Selection Cards */}
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex w-[calc(100%-45rem)] justify-center md:flex-1">
-                    <Button onClick={handleFindRoute} className="w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt">
+                    <Button onClick={handleFindRoute} disabled={!hasWsConnection} className={` ${!hasWsConnection ? 'border-2 border-negative':''} w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt`}>
                         {findRouteString}
                     </Button>
                 </div>
@@ -677,6 +683,19 @@ const RouteFinding = () => {
                         />
                     </div>
                 )}
+
+                {!hasWsConnection &&
+                    <div className="absolute bottom-4 left-4 right-4">
+                        {/* Takes full width at the bottom with margins adjusted */}
+                        <StatusDisplay
+                            primaryMessage={"No consistent Connection is currently established to the server"}
+                            secondaryMessage={"Route Finding is not available while there is no connection"}
+                            progressBarPercent={null}
+                            completeRoute={false}
+                            hasErrored={true}
+                            expandedArtists={expandedArtists}
+                        />
+                    </div>}
 
                 {/* Dynamic Graph */}
                 {graphData.nodes.length > 0 && doGraphCalculations && (

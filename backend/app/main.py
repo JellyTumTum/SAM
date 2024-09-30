@@ -19,7 +19,8 @@ app.add_middleware(
         "http://cst.dev/sam", 
         "https://cst.dev/sam",
         "ws://cst.dev/sam", 
-        "wss://cst.dev/sam"      
+        "wss://cst.dev/sam",
+        "127.0.0.1",  # for nginx websocket proxy purposes 
     ], # covering all the bases, best squash that error
     allow_credentials=True,
     allow_methods=["*"],
@@ -57,6 +58,10 @@ async def fetch_route(route_request: RouteRequest, send_full_graph=True, db: Ses
     endingArtist = route_request.ending_artist
     websocket_id = route_request.websocket_id
     
+# Iterate through ws_connection if it's a list of key-value pairs (tuples)
+    for i in connections:
+        print(f"{i}")
+    print(connections)
     ws_connection = connections[websocket_id]
     route_reply: RouteReply = await find_route(startingArtist, endingArtist, ws_connection, db, send_full_graph=send_full_graph)
     if route_reply.route_list == []:
@@ -69,15 +74,30 @@ async def fetch_route(route_request: RouteRequest, send_full_graph=True, db: Ses
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
+    
+    # Add the connection to the dictionary
     connections[client_id] = websocket
+    
+    connection = connections[client_id] # Done this way to find out how this delay turns up. 
+    
+    await connection.send_text(json.dumps({"message": "Websocket Connection Finalised, You can now find a route", 
+                                              "websocket_id": f"{client_id}",
+                                              "update_type": "connection_status"}))
+    
+    # Log the update to the server console
+    print(f"Client {client_id} connected. Current connections: {list(connections.keys())}")
+    
     try:
         while True:
             data = await websocket.receive_text()
             # Handle incoming messages if necessary
-            print(f"Received message: {data}")
+            print(f"Received message from {client_id}: {data}")
     except WebSocketDisconnect:
         print(f"Client {client_id} disconnected")
         del connections[client_id]
+        
+        # Confirmation in the server that the connection was removed
+        print(f"Client {client_id} removed. Current connections: {list(connections.keys())}")
 
 
 if __name__ == "__main__":
