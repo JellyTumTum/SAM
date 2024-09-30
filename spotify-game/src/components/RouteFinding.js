@@ -205,16 +205,15 @@ const RouteFinding = () => {
         const socket = new WebSocket(`${WS_URL}/ws/${id}`);
         console.log("Attempting to run socket.onopen");
 
-        // Function to reset the connection timer
         const resetWsTimer = () => {
             if (webSocketTimerRef.current) {
-                clearTimeout(webSocketTimerRef.current); // Clear the existing timer
+                clearTimeout(webSocketTimerRef.current);
             }
             webSocketTimerRef.current = setTimeout(() => {
                 socket.close()
-                setHasWsConnection(false); // If no ping within 6 seconds, set connection to false
-            }, 6000); // 6-second timer
-        };
+                setHasWsConnection(false); 
+            }, 6000); 
+        }
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
@@ -222,8 +221,9 @@ const RouteFinding = () => {
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify({ type: 'ping' }));
                 }
-            }, 10000); // Ping every 10 seconds
+            }, 10000);
             setPingInterval(interval);
+            socket.send(JSON.stringify({ type: 'ping' }));
         };
 
         socket.onerror = (error) => {
@@ -234,7 +234,7 @@ const RouteFinding = () => {
         socket.onclose = (event) => {
             console.log(`WebSocket closed: Code = ${event.code}, Reason = ${event.reason}`);
             setHasWsConnection(false);
-            if (webSocketTimerRef.current) clearTimeout(webSocketTimerRef.current); // Clear the timer when connection closes
+            if (webSocketTimerRef.current) clearTimeout(webSocketTimerRef.current)
         };
 
         socket.onmessage = (event) => {
@@ -706,10 +706,10 @@ const RouteFinding = () => {
                     <div className="absolute bottom-4 left-4 right-4">
                         {/* Takes full width at the bottom with margins adjusted */}
                         <StatusDisplay
-                            primaryMessage={"No consistent Connection is currently established to the server"}
-                            secondaryMessage={"Route Finding is not available while there is no connection"}
+                            primaryMessage={"No consistent Connection is currently established to the server, so a route search is unavailable"}
+                            secondaryMessage={null}
                             progressBarPercent={null}
-                            completeRoute={false}
+                            completeRoute={true}
                             hasErrored={true}
                             expandedArtists={expandedArtists}
                         />

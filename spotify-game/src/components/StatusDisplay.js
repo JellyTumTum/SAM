@@ -5,7 +5,7 @@ import {
 } from '@material-tailwind/react';
 
 
-const StatusDisplay = ({ primaryMessage, secondaryMessage, progressBarPercent, completeRoute, hasErrored = false, expandedArtists=0}) => {
+const StatusDisplay = ({ primaryMessage, secondaryMessage, progressBarPercent, completeRoute, hasErrored = false, expandedArtists = 0 }) => {
     const cardRef = useRef(null);
 
     return (
@@ -16,13 +16,15 @@ const StatusDisplay = ({ primaryMessage, secondaryMessage, progressBarPercent, c
 
             {/* Messages */}
             <div className="flex flex-col justify-start items-center">
-                <div className="flex flex-row justify-between items-center w-full px-4">
-                    <Typography variant="h6" className="text-txt text-md dark:text-darkTxt">
+                <div className={`flex flex-row justify-between items-center ${expandedArtists ? 'text-center':''} w-full px-4`}>
+                    <Typography variant="h6" className={`text-txt text-md dark:text-darkTxt`}>
                         {primaryMessage}
                     </Typography>
-                    <Typography variant="h6" className="text-txt text-md dark:text-darkTxt">
-                        Artists searched: {expandedArtists}
-                    </Typography>
+                    {expandedArtists &&
+                        <Typography variant="h6" className="text-txt text-md dark:text-darkTxt">
+                            Artists searched: {expandedArtists}
+                        </Typography>
+                    }
                 </div>
 
                 <Typography variant="paragraph" className="text-sm text-txt dark:text-darkTxt">

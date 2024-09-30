@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .models import Base, engine
 from .spotify_service import *
+from cachetools import TTLCache
 import pytz
 import asyncio
-
 
 app = FastAPI()
 
@@ -30,6 +30,28 @@ app.add_middleware(
 )
 
 connections: Dict[str, WebSocket] = {}
+ws_cache = TTLCache(maxsize=1000, ttl=600)
+
+# Function to add a WebSocket connection to the cache
+def add_ws_connection(client_id, websocket):
+    connections[client_id] = websocket
+    ws_cache[client_id] = {
+        'connection': websocket,
+        'added_at': datetime.now()
+    }
+    print(f"WebSocket connection for {client_id} added to cache.")
+
+# Function to retrieve a WebSocket connection from the cache
+def get_ws_connection(client_id):
+    if connections[client_id]:
+        print(f"Found connection for {client_id} in connections.")
+        return connections[client_id]
+    if client_id in ws_cache:
+        print(f"Found connection for {client_id} in cache.")
+        return ws_cache[client_id]['connection']
+    else:
+        print(f"No active connection for {client_id} found in cache.")
+        return None
 
 @app.on_event("startup")
 def startup_event():
@@ -60,11 +82,7 @@ async def fetch_route(route_request: RouteRequest, send_full_graph=True, db: Ses
     endingArtist = route_request.ending_artist
     websocket_id = route_request.websocket_id
     
-# Iterate through ws_connection if it's a list of key-value pairs (tuples)
-    for i in connections:
-        print(f"{i}")
-    print(connections)
-    ws_connection = connections[websocket_id]
+    ws_connection = get_ws_connection(websocket_id)
     route_reply: RouteReply = await find_route(startingArtist, endingArtist, ws_connection, db, send_full_graph=send_full_graph)
     if route_reply.route_list == []:
         raise HTTPException(status_code=404, detail="No route found between the specified artists. Potential closed loop chosen for starting or ending artist.")
@@ -78,9 +96,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
     
     # Add the connection to the dictionary
-    connections[client_id] = websocket
+    add_ws_connection(client_id, websocket)
+    get_ws_connection(client_id)
     
-    connection = connections[client_id] # Done this way to find out how this delay turns up. 
+    connection = get_ws_connection(client_id) # To see in console which method it used. can be removed once its working
+    print(f"ClientID: {client_id}. Current connections: {list(connections.keys())}. Current Cached: {list(ws_cache.keys())}")
     
     await connection.send_text(json.dumps({"message": "Websocket Connection Finalised, You can now find a route", 
                                               "websocket_id": f"{client_id}",
@@ -111,9 +131,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         # Cancel the ping task when the connection closes
         ping_task.cancel()
         # Confirmation in the server that the connection was removed
-        print(f"Client {client_id} removed. Current connections: {list(connections.keys())}")
+        print(f"Client {client_id} removed from connections. Current connections: {list(connections.keys())}")
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# TODO: 
+# Make a Cache of the WebSocket Information that stuff is saved in for 10 minutes, then if the connection errors as its got no information it can grab it from the cache, I assume it will work.
