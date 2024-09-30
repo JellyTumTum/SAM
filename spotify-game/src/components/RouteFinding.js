@@ -11,7 +11,7 @@ import { EyeIcon, EyeSlashIcon, InformationCircleIcon } from '@heroicons/react/2
 
 const RouteFinding = () => {
     const API_URL = process.env.REACT_APP_API_URL;
-    const WS_URL = process.env.REACT_APP_WS_URL;
+    const WS_URL = process.env.REACT_APP_API_WS;
     const [startingArtist, setStartingArtist] = useState(null);
     const [endArtist, setEndArtist] = useState(null);
 
