@@ -61,7 +61,7 @@ const RouteFinding = () => {
     const [ws, setWs] = useState(null);
     const [wsId, setWsId] = useState(null);
     const [pingInterval, setPingInterval] = useState(null);
-    const [pauseWsTimer, setPauseWsTimer] = useState(false);
+    // const [pauseWsTimer, setPauseWsTimer] = useState(false);
 
     const switchGraphCalculations = () => {
         if (doGraphCalculations) {
@@ -171,28 +171,39 @@ const RouteFinding = () => {
 
     useEffect(() => {
         if (findRouteQueued) {
-            setFindRouteString("Reestablishing Link...")
-            handleFindRoute();
-            setFindRouteQueued(false);
-        }
+            setFindRouteString("Reestablishing Link...");
 
+            const timeoutId = setTimeout(() => {
+                handleFindRoute();
+                setFindRouteQueued(false);
+            }, 500); 
+            return () => clearTimeout(timeoutId);
+        }
     }, [findRouteQueued]);
 
-    useEffect(() => {
-        const id = generateWebSocketId();
-        setWsId(id);
-        console.log("creating websocket with id: " + id);
-        const socket = createWebSocket(id);
-        setResumeWsTimerFunction(resumeWsTimerFunction);
-        setWs(socket);
 
-        return () => {
-            clearInterval(pingInterval);
-            if (socket) {
-                socket.close();
-            }
-        };
-    }, []);
+    const socketRef = useRef(null); // Outside of useEffect, cause they dont like when you put them inside (literal error impossible if I wanted to)
+    useEffect(() => {
+        if (!hasWsConnection) {
+            console.log("Running websocket connection attempt");
+
+            const id = generateWebSocketId();
+            setWsId(id);
+            console.log("creating websocket with id: " + id);
+            const newSocket = createWebSocket(id);
+            setWs(newSocket);
+
+            socketRef.current = newSocket;
+
+            return () => {
+                if (socketRef.current === newSocket && newSocket.readyState === WebSocket.OPEN) {
+                    console.log("Closing websocket connection");
+                    newSocket.close();
+                }
+                clearInterval(pingInterval);
+            };
+        }
+    }, [hasWsConnection]);
 
     const updateNodeIsComplete = (nodes, id) => {
         return nodes.map(node => node.id === id ? { ...node, is_complete: true, is_selected: false } : node);
@@ -219,27 +230,27 @@ const RouteFinding = () => {
         const socket = new WebSocket(`${WS_URL}/ws/${id}`);
         console.log("Attempting to run socket.onopen");
 
-        const resetWsTimer = () => {
-            if (webSocketTimerRef.current) {
-                clearTimeout(webSocketTimerRef.current);
-            }
+        // const resetWsTimer = () => {
+        //     if (webSocketTimerRef.current) {
+        //         clearTimeout(webSocketTimerRef.current);
+        //     }
 
-            if (!pauseWsTimer) {
-                webSocketTimerRef.current = setTimeout(() => {
-                    if (!pauseWsTimer) {
-                        socket.close();
-                        setHasWsConnection(false);
-                    }
-                }, 6000);  // 6-second timer
-            }
-        };
+        //     if (!pauseWsTimer) {
+        //         webSocketTimerRef.current = setTimeout(() => {
+        //             if (!pauseWsTimer) {
+        //                 socket.close();
+        //                 setHasWsConnection(false);
+        //             }
+        //         }, 6000);  // 6-second timer
+        //     }
+        // };
 
-        const pauseWsTimerFunction = () => {
-            setPauseWsTimer(true);
-            if (webSocketTimerRef.current) {
-                clearTimeout(webSocketTimerRef.current);
-            }
-        };
+        // const pauseWsTimerFunction = () => {
+        //     setPauseWsTimer(true);
+        //     if (webSocketTimerRef.current) {
+        //         clearTimeout(webSocketTimerRef.current);
+        //     }
+        // };
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
@@ -270,13 +281,13 @@ const RouteFinding = () => {
                 setHasWsConnection(true)
             }
             if (data.update_type === "ping") {
-                resetWsTimer()
+                // resetWsTimer()
             }
 
 
             if (routeFound.current === false) {
                 const data = JSON.parse(event.data);
-                resetWsTimer();
+                // resetWsTimer();
 
                 // console.log(data);
 
@@ -290,7 +301,7 @@ const RouteFinding = () => {
                     */
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
-                    pauseWsTimerFunction();
+                    // pauseWsTimerFunction();
                     if (data.full_graph) {
                         setGraphData(prevGraphData => {
                             setPrevGraphData(prevGraphData)
@@ -410,6 +421,7 @@ const RouteFinding = () => {
         } else if (retryCount < maxRetries) {
             console.log(`WebSocket not open, retrying... (${retryCount + 1}/${maxRetries})`);
             setFindRouteString("Connecting to server...")
+            // setHasWsConnection(false);
             setTimeout(() => ensureWebSocketConnection(callback, maxRetries, retryCount + 1), 1000); // Retry after 1 second
         } else {
             setFindRouteString("Server unavailable");
@@ -441,7 +453,7 @@ const RouteFinding = () => {
                         websocket_id: wsId
                     });
                     stopTimer();
-                    setPauseWsTimer(false);
+                    // setPauseWsTimer(false);
                     routeFound.current = true;
                     setFindRouteString("Find Route");
                     console.log('Route:', response.data.route_list);
@@ -676,7 +688,7 @@ const RouteFinding = () => {
 
                 {/* Button Between Selection Cards */}
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex w-[calc(100%-45rem)] justify-center md:flex-1">
-                    <Button onClick={handleFindRoute} disabled={!hasWsConnection} className={` ${!hasWsConnection ? 'border-2 border-negative' : ''} w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt`}>
+                    <Button onClick={handleFindRoute} className={` ${!hasWsConnection ? 'border-2 border-negative' : ''} w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt`}>
                         {findRouteString}
                     </Button>
                 </div>
@@ -747,7 +759,7 @@ const RouteFinding = () => {
                     <div className="absolute bottom-4 left-4 right-4">
                         {/* Takes full width at the bottom with margins adjusted */}
                         <StatusDisplay
-                            primaryMessage={"Warning: no consistent connection to the server"}
+                            primaryMessage={"Warning: no consistent connection to the server. An attempt will be made when you try to find a route"}
                             secondaryMessage={null}
                             progressBarPercent={null}
                             completeRoute={true}
