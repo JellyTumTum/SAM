@@ -211,8 +211,8 @@ const RouteFinding = () => {
             }
             webSocketTimerRef.current = setTimeout(() => {
                 socket.close()
-                setHasWsConnection(false); 
-            }, 6000); 
+                setHasWsConnection(false);
+            }, 6000);
         }
 
         socket.onopen = () => {
@@ -250,6 +250,8 @@ const RouteFinding = () => {
 
             if (routeFound.current === false) {
                 const data = JSON.parse(event.data);
+                resetWsTimer();
+                
                 // console.log(data);
 
                 if (data.update_type === "start") {
@@ -547,12 +549,10 @@ const RouteFinding = () => {
                 flex flex-col
                 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg justify-between items-center border-2 border-accent dark:border-darkAccent relative`}
                 >
-                    <XMarkIcon onClick={event => { setUsefulInformation(false) }} className='absolute top-4 right-4
-                h-6 w-6
-                text-negative'>
+                        <XMarkIcon onClick={event => { setUsefulInformation(false) }} className=' hover:accent dark:hover-darkAccent absolute top-4 right-4 h-6 w-6 text-negative'>
 
-                    </XMarkIcon>
-                    <Typography className="text-txt dark:text-darkTxt mt-2" variant='h3'>Useful Information </Typography>
+                        </XMarkIcon>
+                    <Typography className="text-txt dark:text-darkTxt mt-2" variant='h3'>Useful Information (Optional Read) </Typography>
                     <div className='flex flex-row h-full w-full justify-between pb-4 px-4'>
                         {/* <Card className={`transition-all duration-300 ease-in-out overflow-visible 
                 h-full w-auto 
@@ -584,12 +584,12 @@ const RouteFinding = () => {
                             </Typography>
                         </Card>
                         <Card className={`transition-all duration-300 ease-in-out overflow-visible 
-                h-full w-auto
-                p-2
-                flex flex-col
-                bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg items-center border-accent dark:border-darkAccent relative`}>
+                    h-full w-auto
+                    p-2
+                    flex flex-col
+                    bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg items-center border-accent dark:border-darkAccent relative`}>
                             <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-md" variant='h4'>Tips for usability</Typography>
-                            <Typography className="text-negative dark:text-negative mt-2 text-left text-sm" variant='paragraph'>
+                            <Typography className="text-negative dark:text-negative mt-2 text-left text-sm flex md:hidden" variant='paragraph'>
                                 It has been detected you may be on a mobile device, this application was not designed for mobile use due to some incompatibilties with the graphing framework used. This means the application may be more difficult / unable to be used correctly
                             </Typography>
                             <Typography className="text-txt dark:text-darkTxt mt-2 text-left text-sm" variant='paragraph'>
@@ -602,7 +602,7 @@ const RouteFinding = () => {
                                 2. Preventing Lag: Due to the high number of physics operations (that increase exponentially with graph size), halting the graphs generation does lead to some performance benefit (however quickly dimishes as graphs grow in size), so it can make larger graphs more user-friendly.
                             </Typography>
                             <Typography className="text-negative text-left text-sm mt-2" variant='paragraph'>
-                                Even with setting optimisations, some artists either have so many albums to scrape that it will take over a minute just to retrieve the information from spotify, or the path is so hard to find the less than optimal algorithm I use to decide on the next artist cannot find the correct artist (out of potentially 1000s) within a reasonable time-frame before the graph is a physics nightmare to calculate anyway (resulting in a frozen webpage normally, if this happens just close the tab as the routes a lost cause if it hasnt already crashed by this point)
+                                Even with setting optimisations, some artists either have so many albums to scrape that it will take over a minute just to retrieve the information from spotify, or the path is so hard to find the less than optimal algorithm I use to decide on the next artist cannot find the correct artist (out of potentially 1000s) within a reasonable number of searches before the graph is a physics nightmare to calculate anyway (resulting in a frozen webpage, if this happens just close the tab as the page will not become useable)
                             </Typography>
 
                         </Card>
@@ -635,7 +635,7 @@ const RouteFinding = () => {
 
                 {/* Button Between Selection Cards */}
                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex w-[calc(100%-45rem)] justify-center md:flex-1">
-                    <Button onClick={handleFindRoute} disabled={!hasWsConnection} className={` ${!hasWsConnection ? 'border-2 border-negative':''} w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt`}>
+                    <Button onClick={handleFindRoute} disabled={!hasWsConnection} className={` ${!hasWsConnection ? 'border-2 border-negative' : ''} w-full h-14 bg-primary dark:bg-darkBackground2 text-darkTxt`}>
                         {findRouteString}
                     </Button>
                 </div>
@@ -688,7 +688,7 @@ const RouteFinding = () => {
                 )}
 
                 {/* Status Display */}
-                {displayMessage && graphData.nodes.length > 0 && (
+                {displayMessage && graphData.nodes.length > 0 && hasWsConnection && (
                     <div className="absolute bottom-4 left-4 right-4">
                         {/* Takes full width at the bottom with margins adjusted */}
                         <StatusDisplay
@@ -706,7 +706,7 @@ const RouteFinding = () => {
                     <div className="absolute bottom-4 left-4 right-4">
                         {/* Takes full width at the bottom with margins adjusted */}
                         <StatusDisplay
-                            primaryMessage={"No consistent Connection is currently established to the server, so a route search is unavailable"}
+                            primaryMessage={"Warning: no consistent connection to the server"}
                             secondaryMessage={null}
                             progressBarPercent={null}
                             completeRoute={true}

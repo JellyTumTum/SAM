@@ -17,7 +17,7 @@ const StatusDisplay = ({ primaryMessage, secondaryMessage, progressBarPercent, c
             {/* Messages */}
             <div className="flex flex-col justify-start items-center">
                 <div className={`flex flex-row justify-between items-center ${expandedArtists ? 'text-center':''} w-full px-4`}>
-                    <Typography variant="h6" className={`text-txt text-md dark:text-darkTxt`}>
+                    <Typography variant="h6" className={`text-txt text-sm dark:text-darkTxt`}>
                         {primaryMessage}
                     </Typography>
                     {expandedArtists &&
