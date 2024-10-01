@@ -49,6 +49,7 @@ const RouteFinding = () => {
     const timerRef = useRef(null); // Reference to the timer interval
 
     const webSocketTimerRef = useRef(null);
+    const [resumeWsTimerFunction, setResumeWsTimerFunction] = useState(null);
 
     // Showcase variables
     const [showcaseArtist, setShowcaseArtist] = useState(null);
@@ -58,6 +59,7 @@ const RouteFinding = () => {
     const [ws, setWs] = useState(null);
     const [wsId, setWsId] = useState(null);
     const [pingInterval, setPingInterval] = useState(null);
+    const [pauseWsTimer, setPauseWsTimer] = useState(false);
 
     const switchGraphCalculations = () => {
         if (doGraphCalculations) {
@@ -170,6 +172,7 @@ const RouteFinding = () => {
         setWsId(id);
         console.log("creating websocket with id: " + id);
         const socket = createWebSocket(id);
+        setResumeWsTimerFunction(resumeWsTimerFunction);
         setWs(socket);
 
         return () => {
@@ -209,11 +212,23 @@ const RouteFinding = () => {
             if (webSocketTimerRef.current) {
                 clearTimeout(webSocketTimerRef.current);
             }
-            webSocketTimerRef.current = setTimeout(() => {
-                socket.close()
-                setHasWsConnection(false);
-            }, 6000);
-        }
+        
+            if (!pauseWsTimer) {
+                webSocketTimerRef.current = setTimeout(() => {
+                    if (!pauseWsTimer) { 
+                        socket.close();
+                        setHasWsConnection(false);
+                    }
+                }, 6000);  // 6-second timer
+            }
+        };
+        
+        const pauseWsTimerFunction = () => {
+            setPauseWsTimer(true);
+            if (webSocketTimerRef.current) {
+                clearTimeout(webSocketTimerRef.current);
+            }
+        };
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
@@ -264,6 +279,7 @@ const RouteFinding = () => {
                     */
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
+                    pauseWsTimerFunction();
                     if (data.full_graph) {
                         setGraphData(prevGraphData => {
                             setPrevGraphData(prevGraphData)
@@ -414,6 +430,7 @@ const RouteFinding = () => {
                         websocket_id: wsId
                     });
                     stopTimer();
+                    setPauseWsTimer(false);
                     routeFound.current = true;
                     setFindRouteString("Find Route");
                     console.log('Route:', response.data.route_list);
