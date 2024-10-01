@@ -43,10 +43,10 @@ def add_ws_connection(client_id, websocket):
 
 # Function to retrieve a WebSocket connection from the cache
 def get_ws_connection(client_id):
-    if connections[client_id]:
+    if client_id in connections:
         print(f"Found connection for {client_id} in connections.")
         return connections[client_id]
-    if client_id in ws_cache:
+    elif client_id in ws_cache:
         print(f"Found connection for {client_id} in cache.")
         return ws_cache[client_id]['connection']
     else:
@@ -95,29 +95,25 @@ async def fetch_route(route_request: RouteRequest, send_full_graph=True, db: Ses
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
     
-    # Add the connection to the dictionary
     add_ws_connection(client_id, websocket)
     get_ws_connection(client_id)
     
-    connection = get_ws_connection(client_id) # To see in console which method it used. can be removed once its working
+    connection = get_ws_connection(client_id)
     print(f"ClientID: {client_id}. Current connections: {list(connections.keys())}. Current Cached: {list(ws_cache.keys())}")
     
     await connection.send_text(json.dumps({"message": "Websocket Connection Finalised, You can now find a route", 
                                               "websocket_id": f"{client_id}",
                                               "update_type": "connection_status"}))
     
-    # Task to send ping messages every 5 seconds
     async def ping():
         while True:
             try:
-                # Send a ping message
                 await websocket.send_text(json.dumps({"message": "ping", "websocket_id": client_id, "update_type": "ping"}))
-                await asyncio.sleep(5)  # Wait for 5 seconds before sending the next ping
+                await asyncio.sleep(5) 
             except Exception as e:
                 print(f"Error in ping task: {e}")
                 break
 
-    # Start the ping task
     ping_task = asyncio.create_task(ping())
     
     try:
@@ -128,9 +124,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     except WebSocketDisconnect:
         print(f"Client {client_id} disconnected")
         del connections[client_id]
-        # Cancel the ping task when the connection closes
         ping_task.cancel()
-        # Confirmation in the server that the connection was removed
         print(f"Client {client_id} removed from connections. Current connections: {list(connections.keys())}")
 
 
@@ -141,3 +135,4 @@ if __name__ == "__main__":
 
 # TODO: 
 # Make a Cache of the WebSocket Information that stuff is saved in for 10 minutes, then if the connection errors as its got no information it can grab it from the cache, I assume it will work.
+    # Fix issue with trying to access null element if connections[client_id]
