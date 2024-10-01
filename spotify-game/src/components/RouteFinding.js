@@ -51,6 +51,8 @@ const RouteFinding = () => {
     const webSocketTimerRef = useRef(null);
     const [resumeWsTimerFunction, setResumeWsTimerFunction] = useState(null);
 
+    const [findRouteQueued, setFindRouteQueued] = useState(false);
+
     // Showcase variables
     const [showcaseArtist, setShowcaseArtist] = useState(null);
     const [edgeArtist1, setEdgeArtist1] = useState(null);
@@ -168,6 +170,15 @@ const RouteFinding = () => {
     }, []);
 
     useEffect(() => {
+        if (findRouteQueued) {
+            setFindRouteString("Reestablishing Link...")
+            handleFindRoute();
+            setFindRouteQueued(false);
+        }
+
+    }, [findRouteQueued]);
+
+    useEffect(() => {
         const id = generateWebSocketId();
         setWsId(id);
         console.log("creating websocket with id: " + id);
@@ -212,17 +223,17 @@ const RouteFinding = () => {
             if (webSocketTimerRef.current) {
                 clearTimeout(webSocketTimerRef.current);
             }
-        
+
             if (!pauseWsTimer) {
                 webSocketTimerRef.current = setTimeout(() => {
-                    if (!pauseWsTimer) { 
+                    if (!pauseWsTimer) {
                         socket.close();
                         setHasWsConnection(false);
                     }
                 }, 6000);  // 6-second timer
             }
         };
-        
+
         const pauseWsTimerFunction = () => {
             setPauseWsTimer(true);
             if (webSocketTimerRef.current) {
@@ -266,7 +277,7 @@ const RouteFinding = () => {
             if (routeFound.current === false) {
                 const data = JSON.parse(event.data);
                 resetWsTimer();
-                
+
                 // console.log(data);
 
                 if (data.update_type === "start") {
@@ -446,13 +457,26 @@ const RouteFinding = () => {
                     })
                 } catch (error) {
                     console.error('Error finding route:', error);
-                    stopTimer()
-                    setHasErrored(true)
+                    stopTimer();
+                    setHasErrored(true);
                     setFindRouteString("Find Route");
-                    setDisplayMessage("An Error occured while attempting to find a path.")
-                    setSecondaryMessage(error.response.data.detail + " To prevent further issues, please refresh the page to re-establish a connection");
 
+                    if (error.response && error.response.status === 404) {
+                        setDisplayMessage("An Error occurred while attempting to find a path.");
+                        setSecondaryMessage(error.response.data.detail + " To prevent further issues, please refresh the page to re-establish a connection.");
+                    } else if (error.response && error.response.status === 440) {
+                        setDisplayMessage("Session connection lost, reestablishing WebSocket connection.");
+                        setHasWsConnection(false);
+                        setFindRouteQueued(true);
+                        // You can also trigger a WebSocket reconnection or other logic here
+                        // e.g., reconnectWebSocket();
+                    } else {
+                        // Handle other errors
+                        setDisplayMessage("An unknown error occurred.");
+                        setSecondaryMessage("Please try again later.");
+                    }
                 }
+
             } else {
                 console.log('one or two artists missing');
             }
@@ -566,9 +590,9 @@ const RouteFinding = () => {
                 flex flex-col
                 bg-background2 dark:bg-darkBackground2 rounded-lg shadow-lg justify-between items-center border-2 border-accent dark:border-darkAccent relative`}
                 >
-                        <XMarkIcon onClick={event => { setUsefulInformation(false) }} className=' hover:accent dark:hover-darkAccent absolute top-4 right-4 h-6 w-6 text-negative'>
+                    <XMarkIcon onClick={event => { setUsefulInformation(false) }} className=' hover:accent dark:hover-darkAccent absolute top-4 right-4 h-6 w-6 text-negative'>
 
-                        </XMarkIcon>
+                    </XMarkIcon>
                     <Typography className="text-txt dark:text-darkTxt mt-2" variant='h3'>Useful Information (Optional Read) </Typography>
                     <div className='flex flex-row h-full w-full justify-between pb-4 px-4'>
                         {/* <Card className={`transition-all duration-300 ease-in-out overflow-visible 

@@ -39,7 +39,8 @@ def add_ws_connection(client_id, websocket):
         'connection': websocket,
         'added_at': datetime.now()
     }
-    print(f"WebSocket connection for {client_id} added to cache.")
+    print(f"WebSocket connection for {client_id} added to cache. ")
+    print(f"Current connections: {list(connections.keys())}. Current Cached: {list(ws_cache.keys())}")
 
 # Function to retrieve a WebSocket connection from the cache
 def get_ws_connection(client_id):
@@ -76,13 +77,16 @@ class RouteRequest(BaseModel):
     websocket_id: str
 
 @app.post("/routes/find")
-async def fetch_route(route_request: RouteRequest, send_full_graph=True, db: Session=Depends(get_db)) -> RouteReply:
+async def fetch_route(route_request: RouteRequest, send_full_graph=True, db: Session=Depends(get_db), require_ws_connection=True) -> RouteReply:
     
     startingArtist = route_request.starting_artist
     endingArtist = route_request.ending_artist
     websocket_id = route_request.websocket_id
     
     ws_connection = get_ws_connection(websocket_id)
+    if require_ws_connection and ws_connection == None: 
+        raise HTTPException(status_code=440, detail="No WS Connection found, reestablish connection")
+
     route_reply: RouteReply = await find_route(startingArtist, endingArtist, ws_connection, db, send_full_graph=send_full_graph)
     if route_reply.route_list == []:
         raise HTTPException(status_code=404, detail="No route found between the specified artists. Potential closed loop chosen for starting or ending artist.")
@@ -96,7 +100,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
     
     add_ws_connection(client_id, websocket)
-    get_ws_connection(client_id)
     
     connection = get_ws_connection(client_id)
     print(f"ClientID: {client_id}. Current connections: {list(connections.keys())}. Current Cached: {list(ws_cache.keys())}")
