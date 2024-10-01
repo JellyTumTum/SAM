@@ -185,11 +185,11 @@ const RouteFinding = () => {
     const socketRef = useRef(null); // Outside of useEffect, cause they dont like when you put them inside (literal error impossible if I wanted to)
     useEffect(() => {
         if (!hasWsConnection) {
-            console.log("Running websocket connection attempt");
+            // console.log("Running websocket connection attempt");
 
             const id = generateWebSocketId();
             setWsId(id);
-            console.log("creating websocket with id: " + id);
+            // console.log("creating websocket with id: " + id);
             const newSocket = createWebSocket(id);
             setWs(newSocket);
 
@@ -197,7 +197,7 @@ const RouteFinding = () => {
 
             return () => {
                 if (socketRef.current === newSocket && newSocket.readyState === WebSocket.OPEN) {
-                    console.log("Closing websocket connection");
+                    // console.log("Closing websocket connection");
                     newSocket.close();
                 }
                 clearInterval(pingInterval);
@@ -228,32 +228,10 @@ const RouteFinding = () => {
 
     const createWebSocket = (id) => {
         const socket = new WebSocket(`${WS_URL}/ws/${id}`);
-        console.log("Attempting to run socket.onopen");
-
-        // const resetWsTimer = () => {
-        //     if (webSocketTimerRef.current) {
-        //         clearTimeout(webSocketTimerRef.current);
-        //     }
-
-        //     if (!pauseWsTimer) {
-        //         webSocketTimerRef.current = setTimeout(() => {
-        //             if (!pauseWsTimer) {
-        //                 socket.close();
-        //                 setHasWsConnection(false);
-        //             }
-        //         }, 6000);  // 6-second timer
-        //     }
-        // };
-
-        // const pauseWsTimerFunction = () => {
-        //     setPauseWsTimer(true);
-        //     if (webSocketTimerRef.current) {
-        //         clearTimeout(webSocketTimerRef.current);
-        //     }
-        // };
+        // console.log("Attempting to run socket.onopen");
 
         socket.onopen = () => {
-            console.log('WebSocket connection established');
+            // console.log('WebSocket connection established');
             const interval = setInterval(() => {
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify({ type: 'ping' }));
@@ -264,12 +242,12 @@ const RouteFinding = () => {
         };
 
         socket.onerror = (error) => {
-            console.error('WebSocket error observed:', error);
+            // console.error('WebSocket error observed:', error);
             setHasWsConnection(false);
         };
 
         socket.onclose = (event) => {
-            console.log(`WebSocket closed: Code = ${event.code}, Reason = ${event.reason}`);
+            // console.log(`WebSocket closed: Code = ${event.code}, Reason = ${event.reason}`);
             setHasWsConnection(false);
             if (webSocketTimerRef.current) clearTimeout(webSocketTimerRef.current)
         };
@@ -277,7 +255,7 @@ const RouteFinding = () => {
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.update_type === "connection_status") {
-                console.log(data.message)
+                // console.log(data.message)
                 setHasWsConnection(true)
             }
             if (data.update_type === "ping") {
@@ -329,7 +307,7 @@ const RouteFinding = () => {
                     // 1. Display Message adjustment
                     setDisplayMessage(data.message);
                     setExpandedArtists(prevExpandedArtists => prevExpandedArtists + 1)
-                    console.log("RouteFound = " + routeFound + " message = " + data.message)
+                    // console.log("RouteFound = " + routeFound + " message = " + data.message)
                     if (data.full_graph) {
                         setGraphData(prevGraphData => {
                             setPrevGraphData(prevGraphData)
@@ -341,7 +319,7 @@ const RouteFinding = () => {
                         // 1. Update selected artist to complete.
                         if (selectedArtistID != null) {
                             const correct_node = selectedArtistID.id === data.artist_id
-                            console.log(`selectedNode matches node given: ${correct_node}`);
+                            // console.log(`selectedNode matches node given: ${correct_node}`);
                         }
                         const newNodes = updateNodeIsComplete(graphData.nodes, data.artist_id)
                         // 2. Add all new additions to the graph
@@ -383,7 +361,7 @@ const RouteFinding = () => {
                      "message": display_message,
                      "progress": progress_bar}
                     */
-                    console.log(data)
+                    // console.log(data)
                     setSecondaryMessage(data.message)
                     setProgressBarPercent(data.progress)
                 }
@@ -393,7 +371,7 @@ const RouteFinding = () => {
 
         };
         socket.onclose = () => {
-            console.log('WebSocket connection closed, attempting to reconnect');
+            // console.log('WebSocket connection closed, attempting to reconnect');
             setHasWsConnection(false);
             clearInterval(pingInterval);
             const newId = generateWebSocketId();
@@ -419,7 +397,7 @@ const RouteFinding = () => {
             setFindRouteString("Find Route");
             callback();
         } else if (retryCount < maxRetries) {
-            console.log(`WebSocket not open, retrying... (${retryCount + 1}/${maxRetries})`);
+            // console.log(`WebSocket not open, retrying... (${retryCount + 1}/${maxRetries})`);
             setFindRouteString("Connecting to server...")
             // setHasWsConnection(false);
             setTimeout(() => ensureWebSocketConnection(callback, maxRetries, retryCount + 1), 1000); // Retry after 1 second
@@ -456,9 +434,9 @@ const RouteFinding = () => {
                     // setPauseWsTimer(false);
                     routeFound.current = true;
                     setFindRouteString("Find Route");
-                    console.log('Route:', response.data.route_list);
-                    console.log("Final Graph: ");
-                    console.log(response.data.graph)
+                    // console.log('Route:', response.data.route_list);
+                    // console.log("Final Graph: ");
+                    // console.log(response.data.graph)
                     setDisplayMessage('Route: ' + response.data.route_list.map(artist => artist.name).join(' -> '));
                     setSecondaryMessage("");
                     setProgressBarPercent(null);
@@ -480,8 +458,6 @@ const RouteFinding = () => {
                         setDisplayMessage("Session connection lost, reestablishing WebSocket connection.");
                         setHasWsConnection(false);
                         setFindRouteQueued(true);
-                        // You can also trigger a WebSocket reconnection or other logic here
-                        // e.g., reconnectWebSocket();
                     } else {
                         // Handle other errors
                         setDisplayMessage("An unknown error occurred.");

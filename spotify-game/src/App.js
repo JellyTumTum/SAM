@@ -13,7 +13,7 @@ function App() {
     useEffect(() => {
         const getWarningStatus = () => {
             let warningStatus = localStorage.getItem('showWarning');
-            console.log(warningStatus);
+            // console.log(warningStatus);
             if (warningStatus === 'false') {
                 setShowWarning(false);
             }       

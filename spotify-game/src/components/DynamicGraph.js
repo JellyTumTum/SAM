@@ -338,7 +338,7 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
                 const source = graphData.nodes.find(node => node.id === link.source.id);
                 const target = graphData.nodes.find(node => node.id === link.target.id);
                 onEdgeSelect(source, target);
-                console.log(`edge (${source.name} -> ${target.name}) clicked`);
+                // console.log(`edge (${source.name} -> ${target.name}) clicked`);
             });
 
         const clipPath = svg.append('defs')
@@ -398,8 +398,8 @@ const DynamicGraph = ({ graphData, scaleFactor = 1.1, prevGraphData = null, comp
             .attr('y', d => -Math.max(scaledMin, Math.min(scaledMax, (d.popularity * scaleFactor) / 4)))
             .on('click', (event, artist) => {
                 onNodeSelect(artist);
-                console.log(`node (${artist.name}) clicked`);
-                console.log(artist);
+                // console.log(`node (${artist.name}) clicked`);
+                // console.log(artist);
             })
             .attr('opacity', artist => {
                 if (highlightRoute) {
